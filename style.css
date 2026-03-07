@@ -137,3 +137,6 @@ th {
   border-radius: 6px;
   display: none;
 }
+input[type="range"] {
+  width: 100%;
+}

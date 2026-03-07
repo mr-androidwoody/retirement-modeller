@@ -229,10 +229,15 @@ function setInputValue(id, value) {
 }
 
 function populateInputs(scenario) {
+  const stockPct = scenario.stockAllocation * 100;
+  const bondPct = scenario.bondAllocation * 100;
+
   setInputValue("startPortfolio", scenario.startPortfolio);
   setInputValue("annualSpending", scenario.annualSpending);
-  setInputValue("stockAllocation", scenario.stockAllocation * 100);
-  setInputValue("bondAllocation", scenario.bondAllocation * 100);
+  setInputValue("annualSpendingSlider", scenario.annualSpending);
+  setInputValue("stockAllocation", stockPct);
+  setInputValue("stockAllocationSlider", stockPct);
+  setInputValue("bondAllocation", bondPct);
   setInputValue("years", scenario.years);
   setInputValue("monteCarloRuns", scenario.monteCarloRuns);
   setInputValue("seed", scenario.seed);
@@ -246,6 +251,16 @@ function populateInputs(scenario) {
 
 function getNumberValue(id) {
   return Number(document.getElementById(id).value);
+}
+
+function updateBondAllocationFromStock() {
+  const stockEl = document.getElementById("stockAllocation");
+  const bondEl = document.getElementById("bondAllocation");
+  if (!stockEl || !bondEl) return;
+
+  const stock = Number(stockEl.value);
+  const bond = 100 - stock;
+  bondEl.value = Number.isFinite(bond) ? bond : 0;
 }
 
 function readScenarioFromInputs() {
@@ -311,12 +326,44 @@ function validateInputScenario(scenario) {
   }
 }
 
+function wireUpSliders() {
+  const spendingInput = document.getElementById("annualSpending");
+  const spendingSlider = document.getElementById("annualSpendingSlider");
+
+  if (spendingInput && spendingSlider) {
+    spendingSlider.addEventListener("input", () => {
+      spendingInput.value = spendingSlider.value;
+    });
+
+    spendingInput.addEventListener("input", () => {
+      spendingSlider.value = spendingInput.value;
+    });
+  }
+
+  const stockInput = document.getElementById("stockAllocation");
+  const stockSlider = document.getElementById("stockAllocationSlider");
+
+  if (stockInput && stockSlider) {
+    stockSlider.addEventListener("input", () => {
+      stockInput.value = stockSlider.value;
+      updateBondAllocationFromStock();
+    });
+
+    stockInput.addEventListener("input", () => {
+      stockSlider.value = stockInput.value;
+      updateBondAllocationFromStock();
+    });
+  }
+}
+
 window.addEventListener("DOMContentLoaded", () => {
   let showFullTimeline = false;
 
   function runFromInputs() {
     try {
       hideError();
+
+      updateBondAllocationFromStock();
 
       const scenario = readScenarioFromInputs();
       validateInputScenario(scenario);
@@ -335,6 +382,8 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 
   populateInputs(defaultScenario);
+  updateBondAllocationFromStock();
+  wireUpSliders();
   runFromInputs();
 
   const runBtn = document.getElementById("runBtn");
@@ -346,6 +395,7 @@ window.addEventListener("DOMContentLoaded", () => {
   if (resetBtn) {
     resetBtn.addEventListener("click", () => {
       populateInputs(defaultScenario);
+      updateBondAllocationFromStock();
       runFromInputs();
     });
   }

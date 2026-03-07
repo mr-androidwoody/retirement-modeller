@@ -27,16 +27,18 @@
       <div class="field">
         <label for="annualSpending">Annual spending (£)</label>
         <input id="annualSpending" type="number" step="1000" />
+        <input id="annualSpendingSlider" type="range" min="10000" max="120000" step="1000" />
       </div>
 
       <div class="field">
         <label for="stockAllocation">Equity allocation (%)</label>
         <input id="stockAllocation" type="number" step="1" min="0" max="100" />
+        <input id="stockAllocationSlider" type="range" min="0" max="100" step="1" />
       </div>
 
       <div class="field">
         <label for="bondAllocation">Bond allocation (%)</label>
-        <input id="bondAllocation" type="number" step="1" min="0" max="100" />
+        <input id="bondAllocation" type="number" step="1" min="0" max="100" readonly />
       </div>
 
       <div class="field">
