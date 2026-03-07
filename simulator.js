@@ -134,6 +134,9 @@ export function runSingleSimulation(scenario) {
   let previousReturn = null;
   let depleted = false;
   let depletionYear = null;
+  let cutCount = 0;
+  let raiseCount = 0;
+  let inflationSkipCount = 0;
 
   for (let year = 0; year < scenario.years; year += 1) {
     const age1 = scenario.person1Age + year;
@@ -150,6 +153,7 @@ export function runSingleSimulation(scenario) {
 
       if (shouldSkipInflation) {
         events.push("INFLATION_SKIPPED");
+        inflationSkipCount += 1;
       } else {
         spendingTarget = getInflationAdjustedSpending(
           spendingTarget,
@@ -167,6 +171,14 @@ export function runSingleSimulation(scenario) {
 
     spendingTarget = guardrailResult.spending;
     events.push(...guardrailResult.events);
+
+    if (guardrailResult.events.includes("GK_CUT")) {
+      cutCount += 1;
+    }
+
+    if (guardrailResult.events.includes("GK_RAISE")) {
+      raiseCount += 1;
+    }
 
     const statePension1 = getStatePensionForYear({
       currentAge: scenario.person1Age,
@@ -241,7 +253,10 @@ export function runSingleSimulation(scenario) {
     records,
     summary: {
       depleted,
-      depletionYear
+      depletionYear,
+      cutCount,
+      raiseCount,
+      inflationSkipCount
     }
   };
 }
@@ -251,9 +266,13 @@ export function runMonteCarlo(scenario) {
 
   const endingValues = [];
   const yearlyEndingValues = Array.from({ length: scenario.years }, () => []);
-  const depletionCountsByYear = Array.from({ length: scenario.years }, () => 0);
 
   let successes = 0;
+  let totalCuts = 0;
+  let totalRaises = 0;
+  let totalInflationSkips = 0;
+  let earliestDepletionYear = null;
+  const failedDepletionYears = [];
 
   for (let i = 0; i < scenario.monteCarloRuns; i += 1) {
     const scenarioForRun = {
@@ -271,16 +290,25 @@ export function runMonteCarlo(scenario) {
       successes += 1;
     }
 
+    totalCuts += summary.cutCount;
+    totalRaises += summary.raiseCount;
+    totalInflationSkips += summary.inflationSkipCount;
+
+    if (summary.depletionYear !== null) {
+      failedDepletionYears.push(summary.depletionYear);
+
+      if (
+        earliestDepletionYear === null ||
+        summary.depletionYear < earliestDepletionYear
+      ) {
+        earliestDepletionYear = summary.depletionYear;
+      }
+    }
+
     endingValues.push(finalYear.endPortfolio);
 
     for (let year = 0; year < records.length; year += 1) {
       yearlyEndingValues[year].push(records[year].endPortfolio);
-    }
-
-    if (summary.depletionYear !== null) {
-      for (let year = summary.depletionYear - 1; year < scenario.years; year += 1) {
-        depletionCountsByYear[year] += 1;
-      }
     }
   }
 
@@ -297,10 +325,11 @@ export function runMonteCarlo(scenario) {
     };
   });
 
-  const depletionProbabilityByYear = depletionCountsByYear.map((count, index) => ({
-    year: index + 1,
-    probability: count / scenario.monteCarloRuns
-  }));
+  const sortedFailureYears = [...failedDepletionYears].sort((a, b) => a - b);
+  const medianFailureYear =
+    sortedFailureYears.length > 0
+      ? getPercentile(sortedFailureYears, 0.5)
+      : null;
 
   return {
     runs: scenario.monteCarloRuns,
@@ -308,7 +337,14 @@ export function runMonteCarlo(scenario) {
     medianEndingValue: getPercentile(sortedEndingValues, 0.5),
     p10EndingValue: getPercentile(sortedEndingValues, 0.1),
     p90EndingValue: getPercentile(sortedEndingValues, 0.9),
+    worstEndingValue: sortedEndingValues[0],
     yearlyPercentiles,
-    depletionProbabilityByYear
+    downside: {
+      averageCutsPerRun: totalCuts / scenario.monteCarloRuns,
+      averageRaisesPerRun: totalRaises / scenario.monteCarloRuns,
+      averageInflationSkipsPerRun: totalInflationSkips / scenario.monteCarloRuns,
+      earliestDepletionYear,
+      medianFailureYear
+    }
   };
 }

@@ -49,6 +49,48 @@ function renderSummary(monteCarlo) {
   `;
 }
 
+function renderStressSummary(monteCarlo) {
+  const stressEl = document.getElementById("stressSummary");
+  if (!stressEl) return;
+
+  const earliestDepletion =
+    monteCarlo.downside.earliestDepletionYear === null
+      ? "No failures"
+      : `Year ${monteCarlo.downside.earliestDepletionYear}`;
+
+  const medianFailureYear =
+    monteCarlo.downside.medianFailureYear === null
+      ? "No failures"
+      : `Year ${Math.round(monteCarlo.downside.medianFailureYear)}`;
+
+  stressEl.innerHTML = `
+    <div class="card">
+      <div class="card-title">Worst ending value</div>
+      <div class="card-value">${formatCurrency(monteCarlo.worstEndingValue)}</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Average GK cuts per run</div>
+      <div class="card-value">${monteCarlo.downside.averageCutsPerRun.toFixed(2)}</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Average GK raises per run</div>
+      <div class="card-value">${monteCarlo.downside.averageRaisesPerRun.toFixed(2)}</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Average inflation skips per run</div>
+      <div class="card-value">${monteCarlo.downside.averageInflationSkipsPerRun.toFixed(2)}</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Earliest depletion year</div>
+      <div class="card-value">${earliestDepletion}</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Median failure year</div>
+      <div class="card-value">${medianFailureYear}</div>
+    </div>
+  `;
+}
+
 function renderTable(records, showFullTimeline) {
   const tableEl = document.getElementById("results-table");
   if (!tableEl) return;
@@ -97,7 +139,6 @@ function renderTable(records, showFullTimeline) {
 
 let cashflowChartInstance = null;
 let portfolioChartInstance = null;
-let ruinChartInstance = null;
 
 function buildChart(canvasId, config) {
   const canvas = document.getElementById(canvasId);
@@ -189,46 +230,6 @@ function renderPortfolioChart(yearlyPercentiles) {
       scales: {
         y: {
           beginAtZero: true
-        }
-      }
-    }
-  });
-}
-
-function renderRuinChart(depletionProbabilityByYear) {
-  if (ruinChartInstance) {
-    ruinChartInstance.destroy();
-  }
-
-  ruinChartInstance = buildChart("ruinChart", {
-    type: "line",
-    data: {
-      labels: depletionProbabilityByYear.map((r) => `Year ${r.year}`),
-      datasets: [
-        {
-          label: "Probability of depletion",
-          data: depletionProbabilityByYear.map((r) => r.probability * 100),
-          borderWidth: 2
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          position: "top"
-        }
-      },
-      scales: {
-        y: {
-          beginAtZero: true,
-          max: 100,
-          ticks: {
-            callback(value) {
-              return `${value}%`;
-            }
-          }
         }
       }
     }
@@ -423,9 +424,9 @@ window.addEventListener("DOMContentLoaded", () => {
       const monteCarlo = runMonteCarlo(scenario);
 
       renderSummary(monteCarlo);
+      renderStressSummary(monteCarlo);
       renderCashflowChart(singleResult.records);
       renderPortfolioChart(monteCarlo.yearlyPercentiles);
-      renderRuinChart(monteCarlo.depletionProbabilityByYear);
       renderTable(singleResult.records, showFullTimeline);
     } catch (error) {
       showError(error.message);
