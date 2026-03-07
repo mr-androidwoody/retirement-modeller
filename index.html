@@ -13,219 +13,177 @@
 </head>
 <body>
   <div class="page-shell">
-    <header class="page-header">
-      <div>
-        <div class="eyebrow">Retirement planning dashboard</div>
+    <header class="topbar">
+      <div class="topbar-copy">
         <h1>Retirement Simulator</h1>
-        <p class="page-subtitle">Monte Carlo testing with Guyton-Klinger guardrails and state pension offsets</p>
+        <p>Monte Carlo testing with Guyton-Klinger guardrails and state pension offsets</p>
       </div>
-      <div class="header-badges">
-        <div class="header-badge">
-          <span class="badge-label">Model mode</span>
+      <div class="topbar-actions">
+        <div class="status-pill">
+          <span>Mode</span>
           <strong id="heroPill">Nominal values</strong>
         </div>
-        <div class="header-badge">
-          <span class="badge-label">Stress testing</span>
-          <strong>Sequence of returns included</strong>
-        </div>
+        <button id="runBtn" class="btn btn-primary">Run Simulation</button>
       </div>
     </header>
 
-    <div class="workspace">
+    <div class="app-layout">
       <aside class="sidebar card">
         <div class="sidebar-header">
-          <h2>Plan inputs</h2>
-          <p>Set portfolio, spending, income offsets, and withdrawal rules.</p>
+          <h2>Inputs</h2>
+          <p>Typical Guyton-Klinger defaults: 20% upper guardrail, 20% lower guardrail, 10% spending adjustment.</p>
         </div>
 
-        <section class="control-section">
-          <div class="section-kicker">Portfolio</div>
-          <div class="field-grid single-col">
-            <label class="field">
-              <span>Starting portfolio</span>
-              <input id="startPortfolio" type="text" inputmode="numeric" />
-            </label>
-
-            <label class="field">
-              <span>Annual spending target</span>
-              <input id="annualSpending" type="text" inputmode="numeric" />
-              <input id="annualSpendingSlider" type="range" min="10000" max="200000" step="1000" />
-            </label>
-
-            <div class="two-col">
-              <label class="field">
-                <span>Simulation years</span>
-                <input id="years" type="number" min="1" max="70" />
-              </label>
-              <label class="field">
-                <span>Inflation</span>
-                <div class="input-suffix">
-                  <input id="inflation" type="number" min="0" max="15" step="0.1" />
-                  <em>%</em>
-                </div>
-              </label>
+        <section class="control-section compact-gap">
+          <label class="field range-field">
+            <div class="range-head">
+              <span>Retirement Period</span>
+              <strong><span id="yearsDisplay">30</span> yrs</strong>
             </div>
-          </div>
-        </section>
-
-        <section class="control-section">
-          <div class="section-kicker">Asset mix</div>
-          <div class="field-grid single-col">
-            <label class="field">
-              <span>Equity allocation</span>
-              <div class="input-suffix">
-                <input id="stockAllocation" type="number" min="0" max="100" />
-                <em>%</em>
-              </div>
-              <input id="stockAllocationSlider" type="range" min="0" max="100" step="1" />
-            </label>
-
-            <label class="field field-readonly">
-              <span>Bond allocation</span>
-              <div class="input-suffix">
-                <input id="bondAllocation" type="number" readonly />
-                <em>%</em>
-              </div>
-            </label>
-
-            <div class="two-col">
-              <label class="field">
-                <span>Equity return</span>
-                <div class="input-suffix">
-                  <input id="stockReturn" type="number" step="0.1" />
-                  <em>%</em>
-                </div>
-              </label>
-              <label class="field">
-                <span>Equity volatility</span>
-                <div class="input-suffix">
-                  <input id="stockVol" type="number" step="0.1" />
-                  <em>%</em>
-                </div>
-              </label>
-            </div>
-
-            <div class="two-col">
-              <label class="field">
-                <span>Bond return</span>
-                <div class="input-suffix">
-                  <input id="bondReturn" type="number" step="0.1" />
-                  <em>%</em>
-                </div>
-              </label>
-              <label class="field">
-                <span>Bond volatility</span>
-                <div class="input-suffix">
-                  <input id="bondVol" type="number" step="0.1" />
-                  <em>%</em>
-                </div>
-              </label>
-            </div>
-          </div>
-        </section>
-
-        <section class="control-section">
-          <div class="section-kicker">Household income</div>
-          <div class="field-grid single-col">
-            <div class="two-col">
-              <label class="field">
-                <span>Person 1 age</span>
-                <input id="person1Age" type="number" min="18" max="100" />
-              </label>
-              <label class="field">
-                <span>Person 2 age</span>
-                <input id="person2Age" type="number" min="18" max="100" />
-              </label>
-            </div>
-
-            <div class="two-col">
-              <label class="field">
-                <span>Person 1 state pension age</span>
-                <input id="person1StatePensionAge" type="number" min="50" max="80" />
-              </label>
-              <label class="field">
-                <span>Person 2 state pension age</span>
-                <input id="person2StatePensionAge" type="number" min="50" max="80" />
-              </label>
-            </div>
-
-            <label class="field">
-              <span>State pension today</span>
-              <input id="statePensionToday" type="text" inputmode="numeric" />
-            </label>
-          </div>
-        </section>
-
-        <section class="control-section">
-          <div class="section-kicker">Simulation</div>
-          <div class="field-grid single-col">
-            <div class="two-col">
-              <label class="field">
-                <span>Monte Carlo runs</span>
-                <input id="monteCarloRuns" type="text" inputmode="numeric" />
-              </label>
-              <label class="field">
-                <span>Random seed</span>
-                <input id="seed" type="number" />
-              </label>
-            </div>
-          </div>
-        </section>
-
-        <section class="control-section">
-          <div class="section-kicker">Guyton-Klinger guardrails</div>
-          <div class="field-grid single-col">
-            <div class="two-col">
-              <label class="field">
-                <span>Upper guardrail</span>
-                <div class="input-suffix">
-                  <input id="upperGuardrail" type="number" step="0.05" />
-                  <em>x</em>
-                </div>
-              </label>
-              <label class="field">
-                <span>Lower guardrail</span>
-                <div class="input-suffix">
-                  <input id="lowerGuardrail" type="number" step="0.05" />
-                  <em>x</em>
-                </div>
-              </label>
-            </div>
-            <div class="two-col">
-              <label class="field">
-                <span>Cut above upper rail</span>
-                <div class="input-suffix">
-                  <input id="cutPct" type="number" step="1" min="0" max="50" />
-                  <em>%</em>
-                </div>
-              </label>
-              <label class="field">
-                <span>Raise below lower rail</span>
-                <div class="input-suffix">
-                  <input id="raisePct" type="number" step="1" min="0" max="50" />
-                  <em>%</em>
-                </div>
-              </label>
-            </div>
-
-            <label class="toggle-row">
-              <input id="skipInflationAfterNegativeReturn" type="checkbox" />
-              <span>Skip inflation increase after a negative market year</span>
-            </label>
-          </div>
-        </section>
-
-        <div class="button-row">
-          <button id="runBtn" class="btn btn-primary">Run simulation</button>
-          <button id="resetBtn" class="btn btn-secondary">Reset defaults</button>
-        </div>
-
-        <div class="switch-grid">
-          <label class="toggle-chip">
-            <input id="showRealValues" type="checkbox" />
-            <span>Show real values</span>
+            <input id="yearsSlider" type="range" min="1" max="70" step="1" />
+            <input id="years" type="number" min="1" max="70" class="visually-hidden" />
           </label>
-          <label class="toggle-chip">
+
+          <label class="field">
+            <span>Initial Capital (£)</span>
+            <input id="startPortfolio" type="text" inputmode="numeric" />
+          </label>
+
+          <label class="field">
+            <span>Stock Allocation (%)</span>
+            <input id="stockAllocation" type="number" min="0" max="100" />
+            <input id="stockAllocationSlider" type="range" min="0" max="100" step="1" />
+          </label>
+
+          <label class="field">
+            <span>Bond Allocation (%)</span>
+            <input id="bondAllocation" type="number" readonly />
+          </label>
+
+          <div class="two-col">
+            <label class="field">
+              <span>Initial Withdrawal Rate (%)</span>
+              <input id="withdrawalRateDisplay" type="text" readonly />
+            </label>
+            <label class="field">
+              <span>Inflation Assumption (%)</span>
+              <input id="inflation" type="number" min="0" max="15" step="0.1" />
+            </label>
+          </div>
+
+          <label class="field">
+            <span>Initial Annual Withdrawal (£)</span>
+            <input id="annualSpending" type="text" inputmode="numeric" />
+            <input id="annualSpendingSlider" type="range" min="10000" max="200000" step="1000" />
+          </label>
+
+          <label class="field toggle-panel">
+            <span>Skip Inflation After Bad Years</span>
+            <div class="checkbox-row">
+              <input id="skipInflationAfterNegativeReturn" type="checkbox" />
+              <span>Enabled</span>
+            </div>
+          </label>
+
+          <div class="field">
+            <span>Chart Mode</span>
+            <div class="segmented-control">
+              <label><input type="radio" name="valueMode" value="nominal" checked /><span>Nominal</span></label>
+              <label><input type="radio" name="valueMode" value="real" /><span>Real</span></label>
+            </div>
+            <input id="showRealValues" type="checkbox" class="visually-hidden" />
+          </div>
+        </section>
+
+        <section class="control-section">
+          <h3 class="subsection-title">State Pension Assumptions</h3>
+          <div class="two-col">
+            <label class="field">
+              <span>Person 1 Age</span>
+              <input id="person1Age" type="number" min="18" max="100" />
+            </label>
+            <label class="field">
+              <span>Person 2 Age</span>
+              <input id="person2Age" type="number" min="18" max="100" />
+            </label>
+          </div>
+          <div class="two-col">
+            <label class="field">
+              <span>State Pension Age</span>
+              <input id="person1StatePensionAge" type="number" min="50" max="80" />
+            </label>
+            <label class="field">
+              <span>State Pension Age</span>
+              <input id="person2StatePensionAge" type="number" min="50" max="80" />
+            </label>
+          </div>
+          <label class="field">
+            <span>Annual State Pension Today (£)</span>
+            <input id="statePensionToday" type="text" inputmode="numeric" />
+          </label>
+        </section>
+
+        <section class="control-section">
+          <h3 class="subsection-title">Capital Market Assumptions</h3>
+          <div class="two-col">
+            <label class="field">
+              <span>Stock Return (%)</span>
+              <input id="stockReturn" type="number" step="0.1" />
+            </label>
+            <label class="field">
+              <span>Stock Volatility (%)</span>
+              <input id="stockVol" type="number" step="0.1" />
+            </label>
+          </div>
+          <div class="two-col">
+            <label class="field">
+              <span>Bond Return (%)</span>
+              <input id="bondReturn" type="number" step="0.1" />
+            </label>
+            <label class="field">
+              <span>Bond Volatility (%)</span>
+              <input id="bondVol" type="number" step="0.1" />
+            </label>
+          </div>
+          <div class="two-col">
+            <label class="field">
+              <span>Monte Carlo Runs</span>
+              <input id="monteCarloRuns" type="text" inputmode="numeric" />
+            </label>
+            <label class="field">
+              <span>Random Seed</span>
+              <input id="seed" type="number" />
+            </label>
+          </div>
+        </section>
+
+        <section class="control-section">
+          <h3 class="subsection-title">Guyton-Klinger Guardrails</h3>
+          <div class="two-col">
+            <label class="field">
+              <span>Upper Guardrail</span>
+              <div class="input-suffix"><input id="upperGuardrail" type="number" step="0.05" /><em>x</em></div>
+            </label>
+            <label class="field">
+              <span>Lower Guardrail</span>
+              <div class="input-suffix"><input id="lowerGuardrail" type="number" step="0.05" /><em>x</em></div>
+            </label>
+          </div>
+          <div class="two-col">
+            <label class="field">
+              <span>Cut Above Upper Rail (%)</span>
+              <div class="input-suffix"><input id="cutPct" type="number" step="1" min="0" max="50" /><em>%</em></div>
+            </label>
+            <label class="field">
+              <span>Raise Below Lower Rail (%)</span>
+              <div class="input-suffix"><input id="raisePct" type="number" step="1" min="0" max="50" /><em>%</em></div>
+            </label>
+          </div>
+        </section>
+
+        <div class="sidebar-actions">
+          <button id="resetBtn" class="btn btn-secondary">Reset Defaults</button>
+          <label class="toggle-chip small-chip">
             <input id="showFullTimeline" type="checkbox" />
             <span>Show full yearly table</span>
           </label>
@@ -235,68 +193,58 @@
       </aside>
 
       <main class="content-grid">
-        <section class="card hero-card">
-          <div class="hero-copy">
-            <div class="section-kicker">Plan assessment</div>
-            <h2>Professional retirement planner view</h2>
-            <p>Monte Carlo results are shown alongside deterministic stress paths so you can see both probability and vulnerability.</p>
-          </div>
-          <div class="hero-stats">
-            <div class="hero-stat">
-              <span>Spending rule</span>
-              <strong>Guyton-Klinger</strong>
-            </div>
-            <div class="hero-stat">
-              <span>Income offset</span>
-              <strong>State pension</strong>
-            </div>
-            <div class="hero-stat">
-              <span>Stress path set</span>
-              <strong id="stressScenarioCount">8 scenarios</strong>
-            </div>
-          </div>
-        </section>
-
-        <section id="summary" class="metric-grid"></section>
-
         <section class="card section-card wide-card">
           <div class="section-header">
             <div>
-              <div class="section-kicker">Cashflow profile</div>
-              <h3>Spending, pension income, and withdrawals</h3>
+              <h3>Portfolio Projection</h3>
+              <p>10th, 50th and 90th percentile portfolio paths</p>
             </div>
           </div>
-          <div class="chart-frame tall"><canvas id="cashflowChart"></canvas></div>
-        </section>
-
-        <section class="card section-card">
-          <div class="section-header">
-            <div>
-              <div class="section-kicker">Portfolio distribution</div>
-              <h3>Monte Carlo percentile paths</h3>
-            </div>
-          </div>
+          <div class="chart-legend-note" id="stressScenarioCount">Sequence stress testing included</div>
           <div class="chart-frame"><canvas id="portfolioChart"></canvas></div>
-        </section>
-
-        <section class="card section-card">
-          <div class="section-header">
-            <div>
-              <div class="section-kicker">Drawdown risk</div>
-              <h3>Failure probability by year</h3>
-            </div>
-          </div>
-          <div class="chart-frame"><canvas id="failureChart"></canvas></div>
+          <p class="chart-footnote">Shaded area shows the range between 10th and 90th percentile outcomes.</p>
         </section>
 
         <section class="card section-card wide-card">
           <div class="section-header">
             <div>
-              <div class="section-kicker">Sequence-of-returns stress tests</div>
-              <h3>Deterministic scenario outcomes</h3>
+              <h3>Annual Household Spending Path</h3>
+              <p>Blue = total household spending, red = portfolio withdrawals, green = state pension income</p>
+            </div>
+          </div>
+          <div class="chart-frame"><canvas id="cashflowChart"></canvas></div>
+          <p class="chart-footnote">Spending is shown in the selected chart mode: nominal or inflation-adjusted real pounds.</p>
+        </section>
+
+        <section id="summary" class="metric-grid wide-card"></section>
+
+        <section class="card section-card">
+          <div class="section-header">
+            <div>
+              <h3>Failure Risk by Year</h3>
+              <p>Cumulative probability of depletion across Monte Carlo runs</p>
+            </div>
+          </div>
+          <div class="chart-frame short"><canvas id="failureChart"></canvas></div>
+        </section>
+
+        <section class="card section-card">
+          <div class="section-header">
+            <div>
+              <h3>Sequence-of-Returns Stress Tests</h3>
+              <p>Deterministic scenario outcomes including early-shock paths</p>
             </div>
           </div>
           <div id="stressSummary" class="metric-grid compact"></div>
+        </section>
+
+        <section class="card section-card wide-card">
+          <div class="section-header">
+            <div>
+              <h3>Stress Test Portfolio Paths</h3>
+              <p>Compare the deterministic stress scenarios against the base case</p>
+            </div>
+          </div>
           <div class="chart-frame"><canvas id="stressChart"></canvas></div>
           <div id="stressTable" class="table-scroll"></div>
         </section>
@@ -304,8 +252,8 @@
         <section class="card section-card wide-card">
           <div class="section-header">
             <div>
-              <div class="section-kicker">Projection detail</div>
-              <h3>Year-by-year deterministic base path</h3>
+              <h3>Projection Detail</h3>
+              <p>Year-by-year deterministic base path</p>
             </div>
           </div>
           <div class="table-scroll">
