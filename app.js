@@ -11,7 +11,6 @@ function formatPercent(value, decimals = 1) {
 
 function renderSummary(monteCarlo) {
   const summaryEl = document.getElementById("summary");
-
   if (!summaryEl) return;
 
   summaryEl.innerHTML = `
@@ -93,7 +92,6 @@ function buildChart(canvasId, config) {
   if (!canvas) return null;
 
   canvas.height = 360;
-
   return new Chart(canvas, config);
 }
 
@@ -225,17 +223,132 @@ function renderRuinChart(depletionProbabilityByYear) {
   });
 }
 
-window.addEventListener("DOMContentLoaded", () => {
-  const singleResult = runSingleSimulation(defaultScenario);
-  const monteCarlo = runMonteCarlo(defaultScenario);
+function setInputValue(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.value = value;
+}
 
+function populateInputs(scenario) {
+  setInputValue("startPortfolio", scenario.startPortfolio);
+  setInputValue("annualSpending", scenario.annualSpending);
+  setInputValue("stockAllocation", scenario.stockAllocation * 100);
+  setInputValue("bondAllocation", scenario.bondAllocation * 100);
+  setInputValue("years", scenario.years);
+  setInputValue("monteCarloRuns", scenario.monteCarloRuns);
+  setInputValue("seed", scenario.seed);
+  setInputValue("inflation", scenario.inflation * 100);
+  setInputValue("person1Age", scenario.person1Age);
+  setInputValue("person2Age", scenario.person2Age);
+  setInputValue("person1StatePensionAge", scenario.person1StatePensionAge);
+  setInputValue("person2StatePensionAge", scenario.person2StatePensionAge);
+  setInputValue("statePensionToday", scenario.statePensionToday);
+}
+
+function getNumberValue(id) {
+  return Number(document.getElementById(id).value);
+}
+
+function readScenarioFromInputs() {
+  return {
+    ...defaultScenario,
+    startPortfolio: getNumberValue("startPortfolio"),
+    annualSpending: getNumberValue("annualSpending"),
+    stockAllocation: getNumberValue("stockAllocation") / 100,
+    bondAllocation: getNumberValue("bondAllocation") / 100,
+    years: getNumberValue("years"),
+    monteCarloRuns: getNumberValue("monteCarloRuns"),
+    seed: getNumberValue("seed"),
+    inflation: getNumberValue("inflation") / 100,
+    person1Age: getNumberValue("person1Age"),
+    person2Age: getNumberValue("person2Age"),
+    person1StatePensionAge: getNumberValue("person1StatePensionAge"),
+    person2StatePensionAge: getNumberValue("person2StatePensionAge"),
+    statePensionToday: getNumberValue("statePensionToday")
+  };
+}
+
+function showError(message) {
+  const errorBox = document.getElementById("errorBox");
+  if (!errorBox) return;
+  errorBox.style.display = "block";
+  errorBox.textContent = message;
+}
+
+function hideError() {
+  const errorBox = document.getElementById("errorBox");
+  if (!errorBox) return;
+  errorBox.style.display = "none";
+  errorBox.textContent = "";
+}
+
+function validateInputScenario(scenario) {
+  if (Math.abs(scenario.stockAllocation + scenario.bondAllocation - 1) > 0.000001) {
+    throw new Error("Equity and bond allocations must add up to 100%.");
+  }
+
+  if (scenario.startPortfolio <= 0) {
+    throw new Error("Starting portfolio must be greater than 0.");
+  }
+
+  if (scenario.annualSpending < 0) {
+    throw new Error("Annual spending cannot be negative.");
+  }
+
+  if (scenario.years <= 0) {
+    throw new Error("Simulation years must be greater than 0.");
+  }
+
+  if (scenario.monteCarloRuns <= 0) {
+    throw new Error("Monte Carlo runs must be greater than 0.");
+  }
+
+  if (scenario.person1StatePensionAge < scenario.person1Age) {
+    throw new Error("Person 1 state pension age cannot be below current age.");
+  }
+
+  if (scenario.person2StatePensionAge < scenario.person2Age) {
+    throw new Error("Person 2 state pension age cannot be below current age.");
+  }
+}
+
+window.addEventListener("DOMContentLoaded", () => {
   let showFullTimeline = false;
 
-  renderSummary(monteCarlo);
-  renderCashflowChart(singleResult.records);
-  renderPortfolioChart(monteCarlo.yearlyPercentiles);
-  renderRuinChart(monteCarlo.depletionProbabilityByYear);
-  renderTable(singleResult.records, showFullTimeline);
+  function runFromInputs() {
+    try {
+      hideError();
+
+      const scenario = readScenarioFromInputs();
+      validateInputScenario(scenario);
+
+      const singleResult = runSingleSimulation(scenario);
+      const monteCarlo = runMonteCarlo(scenario);
+
+      renderSummary(monteCarlo);
+      renderCashflowChart(singleResult.records);
+      renderPortfolioChart(monteCarlo.yearlyPercentiles);
+      renderRuinChart(monteCarlo.depletionProbabilityByYear);
+      renderTable(singleResult.records, showFullTimeline);
+    } catch (error) {
+      showError(error.message);
+    }
+  }
+
+  populateInputs(defaultScenario);
+  runFromInputs();
+
+  const runBtn = document.getElementById("runBtn");
+  if (runBtn) {
+    runBtn.addEventListener("click", runFromInputs);
+  }
+
+  const resetBtn = document.getElementById("resetBtn");
+  if (resetBtn) {
+    resetBtn.addEventListener("click", () => {
+      populateInputs(defaultScenario);
+      runFromInputs();
+    });
+  }
 
   const toggleBtn = document.getElementById("toggleTableBtn");
   if (toggleBtn) {
@@ -244,7 +357,7 @@ window.addEventListener("DOMContentLoaded", () => {
       toggleBtn.textContent = showFullTimeline
         ? "Show first 10 years"
         : "Show full timeline";
-      renderTable(singleResult.records, showFullTimeline);
+      runFromInputs();
     });
   }
 });

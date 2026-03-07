@@ -18,6 +18,63 @@
         margin-bottom: 12px;
       }
 
+      .panel,
+      .chart-wrap,
+      .card,
+      table {
+        background: #fff;
+      }
+
+      .panel {
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 24px;
+      }
+
+      .input-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 14px;
+      }
+
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      label {
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      input[type="number"] {
+        padding: 10px;
+        border: 1px solid #999;
+        border-radius: 6px;
+        font-size: 14px;
+      }
+
+      .button-row {
+        margin-top: 16px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      button {
+        padding: 10px 14px;
+        border: 1px solid #888;
+        background: #f3f3f3;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background: #e9e9e9;
+      }
+
       .summary-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -29,7 +86,6 @@
         border: 1px solid #ccc;
         border-radius: 8px;
         padding: 14px;
-        background: #fff;
       }
 
       .card-title {
@@ -48,7 +104,6 @@
         padding: 16px;
         border: 1px solid #ccc;
         border-radius: 8px;
-        background: #fff;
       }
 
       .chart-wrap canvas {
@@ -58,28 +113,11 @@
         max-height: 360px;
       }
 
-      .controls {
-        margin: 20px 0 10px;
-      }
-
-      button {
-        padding: 10px 14px;
-        border: 1px solid #888;
-        background: #f3f3f3;
-        border-radius: 6px;
-        cursor: pointer;
-      }
-
-      button:hover {
-        background: #e9e9e9;
-      }
-
       table {
         width: 100%;
         border-collapse: collapse;
         margin-top: 12px;
         font-size: 14px;
-        background: #fff;
       }
 
       th,
@@ -97,10 +135,98 @@
       .section {
         margin-top: 28px;
       }
+
+      .error-box {
+        margin-top: 12px;
+        padding: 12px;
+        border: 1px solid #c33;
+        background: #fff1f1;
+        color: #900;
+        border-radius: 6px;
+        display: none;
+      }
     </style>
   </head>
   <body>
     <h1>Retirement Simulator V2</h1>
+
+    <div class="panel">
+      <h2>Inputs</h2>
+      <div class="input-grid">
+        <div class="field">
+          <label for="startPortfolio">Starting portfolio (£)</label>
+          <input id="startPortfolio" type="number" step="1000" />
+        </div>
+
+        <div class="field">
+          <label for="annualSpending">Annual spending (£)</label>
+          <input id="annualSpending" type="number" step="1000" />
+        </div>
+
+        <div class="field">
+          <label for="stockAllocation">Equity allocation (%)</label>
+          <input id="stockAllocation" type="number" step="1" min="0" max="100" />
+        </div>
+
+        <div class="field">
+          <label for="bondAllocation">Bond allocation (%)</label>
+          <input id="bondAllocation" type="number" step="1" min="0" max="100" />
+        </div>
+
+        <div class="field">
+          <label for="years">Simulation years</label>
+          <input id="years" type="number" step="1" min="1" />
+        </div>
+
+        <div class="field">
+          <label for="monteCarloRuns">Monte Carlo runs</label>
+          <input id="monteCarloRuns" type="number" step="100" min="1" />
+        </div>
+
+        <div class="field">
+          <label for="seed">Random seed</label>
+          <input id="seed" type="number" step="1" min="1" />
+        </div>
+
+        <div class="field">
+          <label for="inflation">Inflation (%)</label>
+          <input id="inflation" type="number" step="0.1" min="0" />
+        </div>
+
+        <div class="field">
+          <label for="person1Age">Person 1 age</label>
+          <input id="person1Age" type="number" step="1" min="1" />
+        </div>
+
+        <div class="field">
+          <label for="person2Age">Person 2 age</label>
+          <input id="person2Age" type="number" step="1" min="1" />
+        </div>
+
+        <div class="field">
+          <label for="person1StatePensionAge">Person 1 state pension age</label>
+          <input id="person1StatePensionAge" type="number" step="1" min="1" />
+        </div>
+
+        <div class="field">
+          <label for="person2StatePensionAge">Person 2 state pension age</label>
+          <input id="person2StatePensionAge" type="number" step="1" min="1" />
+        </div>
+
+        <div class="field">
+          <label for="statePensionToday">State pension today (£)</label>
+          <input id="statePensionToday" type="number" step="100" min="0" />
+        </div>
+      </div>
+
+      <div class="button-row">
+        <button id="runBtn">Run simulation</button>
+        <button id="resetBtn">Reset to defaults</button>
+        <button id="toggleTableBtn">Show full timeline</button>
+      </div>
+
+      <div id="errorBox" class="error-box"></div>
+    </div>
 
     <div id="summary" class="summary-grid"></div>
 
@@ -120,9 +246,6 @@
     </div>
 
     <div class="section">
-      <div class="controls">
-        <button id="toggleTableBtn">Show full timeline</button>
-      </div>
       <div id="results-table"></div>
     </div>
 
