@@ -1,131 +1,154 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Retirement Simulator V2</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <link rel="stylesheet" href="./style.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<title>Retirement Simulator V2</title>
+
+<link rel="stylesheet" href="./style.css">
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
 
-  <h1>Retirement Simulator V2</h1>
+<h1>Retirement Simulator V2</h1>
 
-  <div class="panel">
-    <h2>Inputs</h2>
+<div class="panel">
 
-    <div class="input-grid">
+<h2>Inputs</h2>
 
-      <div class="field">
-        <label for="startPortfolio">Starting portfolio (£)</label>
-        <input id="startPortfolio" type="text" inputmode="numeric" />
-      </div>
+<div class="input-grid">
 
-      <div class="field">
-        <label for="annualSpending">Annual spending (£)</label>
-        <input id="annualSpending" type="text" inputmode="numeric" />
-        <input id="annualSpendingSlider" type="range" min="10000" max="120000" step="1000" />
-      </div>
+<div class="field">
+<label>Starting portfolio (£)</label>
+<input id="startPortfolio" type="text" inputmode="numeric">
+</div>
 
-      <div class="field">
-        <label for="stockAllocation">Equity allocation (%)</label>
-        <input id="stockAllocation" type="number" step="1" min="0" max="100" />
-        <input id="stockAllocationSlider" type="range" min="0" max="100" step="1" />
-      </div>
+<div class="field">
+<label>Annual spending (£)</label>
+<input id="annualSpending" type="text" inputmode="numeric">
+<input id="annualSpendingSlider" type="range" min="10000" max="120000" step="1000">
+</div>
 
-      <div class="field">
-        <label for="bondAllocation">Bond allocation (%)</label>
-        <input id="bondAllocation" type="number" step="1" min="0" max="100" readonly />
-      </div>
+<div class="field">
+<label>Equity allocation (%)</label>
+<input id="stockAllocation" type="number" min="0" max="100">
+<input id="stockAllocationSlider" type="range" min="0" max="100">
+</div>
 
-      <div class="field">
-        <label for="years">Simulation years</label>
-        <input id="years" type="number" step="1" min="1" />
-      </div>
+<div class="field">
+<label>Bond allocation (%)</label>
+<input id="bondAllocation" type="number" readonly>
+</div>
 
-      <div class="field">
-        <label for="monteCarloRuns">Monte Carlo runs</label>
-        <input id="monteCarloRuns" type="text" inputmode="numeric" />
-      </div>
+<div class="field">
+<label>Simulation years</label>
+<input id="years" type="number">
+</div>
 
-      <div class="field">
-        <label for="seed">Random seed</label>
-        <input id="seed" type="number" step="1" min="1" />
-      </div>
+<div class="field">
+<label>Monte Carlo runs</label>
+<input id="monteCarloRuns" type="text" inputmode="numeric">
+</div>
 
-      <div class="field">
-        <label for="inflation">Inflation (%)</label>
-        <input id="inflation" type="number" step="0.1" min="0" />
-      </div>
+<div class="field">
+<label>Random seed</label>
+<input id="seed" type="number">
+</div>
 
-      <div class="field">
-        <label for="person1Age">Person 1 age</label>
-        <input id="person1Age" type="number" step="1" min="1" />
-      </div>
+<div class="field">
+<label>Inflation (%)</label>
+<input id="inflation" type="number">
+</div>
 
-      <div class="field">
-        <label for="person2Age">Person 2 age</label>
-        <input id="person2Age" type="number" step="1" min="1" />
-      </div>
+<div class="field">
+<label>Person 1 age</label>
+<input id="person1Age" type="number">
+</div>
 
-      <div class="field">
-        <label for="person1StatePensionAge">Person 1 state pension age</label>
-        <input id="person1StatePensionAge" type="number" step="1" min="1" />
-      </div>
+<div class="field">
+<label>Person 2 age</label>
+<input id="person2Age" type="number">
+</div>
 
-      <div class="field">
-        <label for="person2StatePensionAge">Person 2 state pension age</label>
-        <input id="person2StatePensionAge" type="number" step="1" min="1" />
-      </div>
+<div class="field">
+<label>Person 1 state pension age</label>
+<input id="person1StatePensionAge" type="number">
+</div>
 
-      <div class="field">
-        <label for="statePensionToday">State pension today (£)</label>
-        <input id="statePensionToday" type="text" inputmode="numeric" />
-      </div>
+<div class="field">
+<label>Person 2 state pension age</label>
+<input id="person2StatePensionAge" type="number">
+</div>
 
-    </div>
+<div class="field">
+<label>State pension today (£)</label>
+<input id="statePensionToday" type="text" inputmode="numeric">
+</div>
 
-    <div class="button-row">
-      <button id="runBtn">Run simulation</button>
-      <button id="resetBtn">Reset to defaults</button>
-    </div>
+</div>
 
-    <div id="errorBox" class="error-box"></div>
-  </div>
+<div class="button-row">
 
-  <div class="panel">
-    <h2>View options</h2>
-    <div class="button-row">
-      <button id="valueModeBtn">Show real values</button>
-      <button id="toggleTableBtn">Show yearly detail</button>
-    </div>
-  </div>
+<button id="runBtn">Run simulation</button>
+<button id="resetBtn">Reset to defaults</button>
 
-  <div id="summary" class="summary-grid"></div>
+</div>
 
-  <div class="chart-wrap">
-    <h2>Spending vs Income vs Withdrawals</h2>
-    <canvas id="cashflowChart"></canvas>
-  </div>
+<div id="errorBox" class="error-box"></div>
 
-  <div class="chart-wrap">
-    <h2>Portfolio Paths</h2>
-    <canvas id="portfolioChart"></canvas>
-  </div>
+</div>
 
-  <div class="panel">
-    <h2>Downside and Flexibility</h2>
-    <div id="stressSummary" class="summary-grid"></div>
-  </div>
+<div class="panel">
 
-  <div class="section" id="yearlyDetailSection" style="display: none;">
-    <h2>Yearly detail</h2>
-    <div id="results-table"></div>
-  </div>
+<h2>View options</h2>
 
-  <script type="module" src="./app.js"></script>
+<div class="button-row">
+
+<button id="valueModeBtn">Show real values</button>
+<button id="toggleTableBtn">Show yearly detail</button>
+
+</div>
+
+</div>
+
+<div id="summary" class="summary-grid"></div>
+
+<div class="chart-wrap">
+
+<h2>Spending vs Income vs Withdrawals</h2>
+
+<canvas id="cashflowChart"></canvas>
+
+</div>
+
+<div class="chart-wrap">
+
+<h2>Portfolio Paths</h2>
+
+<canvas id="portfolioChart"></canvas>
+
+</div>
+
+<div class="panel">
+
+<h2>Downside and Flexibility</h2>
+
+<div id="stressSummary" class="summary-grid"></div>
+
+</div>
+
+<div id="yearlyDetailSection" class="section" style="display:none">
+
+<h2>Yearly detail</h2>
+
+<div id="results-table"></div>
+
+</div>
+
+<script type="module" src="./app.js"></script>
 
 </body>
 </html>
