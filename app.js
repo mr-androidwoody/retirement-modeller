@@ -5,6 +5,18 @@ function formatCurrency(value) {
   return `£${Math.round(value).toLocaleString("en-GB")}`;
 }
 
+function formatNumberWithCommas(value) {
+  if (value === "" || value === null || value === undefined) return "";
+  const num = Number(String(value).replace(/,/g, ""));
+  if (Number.isNaN(num)) return "";
+  return num.toLocaleString("en-GB");
+}
+
+function removeCommas(value) {
+  if (!value) return value;
+  return String(value).replace(/,/g, "");
+}
+
 function formatPercent(value, decimals = 1) {
   return `${(value * 100).toFixed(decimals)}%`;
 }
@@ -232,8 +244,8 @@ function populateInputs(scenario) {
   const stockPct = scenario.stockAllocation * 100;
   const bondPct = scenario.bondAllocation * 100;
 
-  setInputValue("startPortfolio", scenario.startPortfolio);
-  setInputValue("annualSpending", scenario.annualSpending);
+  setInputValue("startPortfolio", formatNumberWithCommas(scenario.startPortfolio));
+  setInputValue("annualSpending", formatNumberWithCommas(scenario.annualSpending));
   setInputValue("annualSpendingSlider", scenario.annualSpending);
   setInputValue("stockAllocation", stockPct);
   setInputValue("stockAllocationSlider", stockPct);
@@ -246,11 +258,12 @@ function populateInputs(scenario) {
   setInputValue("person2Age", scenario.person2Age);
   setInputValue("person1StatePensionAge", scenario.person1StatePensionAge);
   setInputValue("person2StatePensionAge", scenario.person2StatePensionAge);
-  setInputValue("statePensionToday", scenario.statePensionToday);
+  setInputValue("statePensionToday", formatNumberWithCommas(scenario.statePensionToday));
 }
 
 function getNumberValue(id) {
-  return Number(document.getElementById(id).value);
+  const raw = document.getElementById(id).value;
+  return Number(removeCommas(raw));
 }
 
 function updateBondAllocationFromStock() {
@@ -258,7 +271,7 @@ function updateBondAllocationFromStock() {
   const bondEl = document.getElementById("bondAllocation");
   if (!stockEl || !bondEl) return;
 
-  const stock = Number(stockEl.value);
+  const stock = Number(removeCommas(stockEl.value));
   const bond = 100 - stock;
   bondEl.value = Number.isFinite(bond) ? bond : 0;
 }
@@ -326,17 +339,55 @@ function validateInputScenario(scenario) {
   }
 }
 
+function enableCommaFormatting(id) {
+  const input = document.getElementById(id);
+  if (!input) return;
+
+  input.addEventListener("input", () => {
+    const digitsOnly = removeCommas(input.value);
+
+    if (digitsOnly === "") {
+      input.value = "";
+      return;
+    }
+
+    if (!/^\d*\.?\d*$/.test(digitsOnly)) {
+      return;
+    }
+
+    const parts = digitsOnly.split(".");
+    const integerPart = parts[0];
+    const decimalPart = parts[1];
+
+    const formattedInteger = integerPart === ""
+      ? ""
+      : Number(integerPart).toLocaleString("en-GB");
+
+    input.value =
+      decimalPart !== undefined
+        ? `${formattedInteger}.${decimalPart}`
+        : formattedInteger;
+  });
+
+  input.addEventListener("blur", () => {
+    const raw = removeCommas(input.value);
+    if (raw === "" || Number.isNaN(Number(raw))) return;
+    input.value = formatNumberWithCommas(raw);
+  });
+}
+
 function wireUpSliders() {
   const spendingInput = document.getElementById("annualSpending");
   const spendingSlider = document.getElementById("annualSpendingSlider");
 
   if (spendingInput && spendingSlider) {
     spendingSlider.addEventListener("input", () => {
-      spendingInput.value = spendingSlider.value;
+      spendingInput.value = formatNumberWithCommas(spendingSlider.value);
     });
 
     spendingInput.addEventListener("input", () => {
-      spendingSlider.value = spendingInput.value;
+      const raw = removeCommas(spendingInput.value);
+      spendingSlider.value = raw || 0;
     });
   }
 
@@ -350,7 +401,7 @@ function wireUpSliders() {
     });
 
     stockInput.addEventListener("input", () => {
-      stockSlider.value = stockInput.value;
+      stockSlider.value = removeCommas(stockInput.value) || 0;
       updateBondAllocationFromStock();
     });
   }
@@ -384,6 +435,11 @@ window.addEventListener("DOMContentLoaded", () => {
   populateInputs(defaultScenario);
   updateBondAllocationFromStock();
   wireUpSliders();
+
+  enableCommaFormatting("startPortfolio");
+  enableCommaFormatting("annualSpending");
+  enableCommaFormatting("statePensionToday");
+
   runFromInputs();
 
   const runBtn = document.getElementById("runBtn");
