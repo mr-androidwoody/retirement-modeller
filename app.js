@@ -1,4 +1,4 @@
-import { defaultScenario } from "./scenarios.js";
+import { defaultScenario, stressTestLibrary } from "./scenarios.js";
 import { buildScenarioFromInputs, runMonteCarlo, runSingleSimulation, runStressTests } from "./simulator.js";
 
 const state = {
@@ -120,7 +120,7 @@ function bindElements() {
     "statePensionToday", "monteCarloRuns", "seed", "upperGuardrail", "lowerGuardrail",
     "cutPct", "raisePct", "skipInflationAfterNegativeReturn", "runBtn", "resetBtn",
     "showRealValues", "showFullTimeline", "summary", "stressSummary", "stressTable", "results-table",
-    "errorBox", "heroPill"
+    "errorBox", "heroPill", "stressScenarioCount"
   ].forEach((id) => {
     els[id.replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = byId(id);
   });
@@ -198,22 +198,29 @@ function renderSummary(monteCarlo, isReal) {
     {
       label: "Monte Carlo runs",
       value: formatNumber(monteCarlo.runs),
-      sub: "Seeded for repeatable test results",
+      sub: "Seeded for repeatable results",
     },
   ], els.summary);
 }
 
-function renderStressSummary(monteCarlo) {
+function renderStressSummary(monteCarlo, stressResults, isReal) {
+  const failedScenarios = stressResults.filter((r) => r.failureYear !== null).length;
+  const worstScenario = [...stressResults].sort((a, b) => {
+    const aValue = formatDisplayValue(isReal, a.endingValue, a.endingValueReal);
+    const bValue = formatDisplayValue(isReal, b.endingValue, b.endingValueReal);
+    return aValue - bValue;
+  })[0];
+
   renderMetricCards([
     {
       label: "Average GK cuts",
       value: monteCarlo.downside.averageCutsPerRun.toFixed(2),
-      sub: "Per Monte Carlo run",
+      sub: "Average cuts per Monte Carlo run",
     },
     {
       label: "Average GK raises",
       value: monteCarlo.downside.averageRaisesPerRun.toFixed(2),
-      sub: "Per Monte Carlo run",
+      sub: "Average raises per Monte Carlo run",
     },
     {
       label: "Inflation skips",
@@ -221,9 +228,21 @@ function renderStressSummary(monteCarlo) {
       sub: "Average skipped upratings per run",
     },
     {
+      label: "Worst stress outcome",
+      value: worstScenario ? worstScenario.name : "—",
+      sub: worstScenario ? formatCurrency(formatDisplayValue(isReal, worstScenario.endingValue, worstScenario.endingValueReal)) : "—",
+      tone: "metric-bad",
+    },
+    {
+      label: "Stress failures",
+      value: `${failedScenarios}/${stressResults.length}`,
+      sub: failedScenarios ? "At least one deterministic path depleted" : "All deterministic paths survived",
+      tone: failedScenarios ? "metric-bad" : "metric-good",
+    },
+    {
       label: "Earliest depletion",
       value: monteCarlo.downside.earliestDepletionYear ? `Year ${monteCarlo.downside.earliestDepletionYear}` : "None",
-      sub: monteCarlo.downside.medianFailureYear ? `Median failure year ${Math.round(monteCarlo.downside.medianFailureYear)}` : "No failed runs",
+      sub: monteCarlo.downside.medianFailureYear ? `Median failed run in year ${Math.round(monteCarlo.downside.medianFailureYear)}` : "No failed Monte Carlo runs",
       tone: monteCarlo.downside.earliestDepletionYear ? "metric-bad" : "metric-good",
     },
   ], els.stressSummary);
@@ -241,6 +260,10 @@ function lineChart(ctx, config) {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: "index", intersect: false },
+      elements: {
+        line: { tension: 0.28 },
+        point: { radius: 0 },
+      },
       plugins: {
         legend: { position: "bottom", labels: { usePointStyle: true, boxWidth: 10 } },
         tooltip: {
@@ -257,7 +280,12 @@ function lineChart(ctx, config) {
         },
       },
       scales: {
+        x: {
+          grid: { color: "rgba(160, 174, 192, 0.12)" },
+          ticks: { maxTicksLimit: 8 },
+        },
         y: {
+          grid: { color: "rgba(160, 174, 192, 0.16)" },
           ticks: {
             callback(value) {
               return config.percent ? `${value}%` : formatCurrency(value);
@@ -321,44 +349,46 @@ function renderStressChart(stressResults, isReal) {
       datasets: stressResults.map((result) => ({
         label: result.name,
         data: result.records.map((row) => formatDisplayValue(isReal, row.endPortfolio, row.endPortfolioReal)),
-        borderWidth: result.key === "early-crash" ? 3 : 2,
+        borderWidth: ["early-crash", "deep-bear-start", "inflation-shock"].includes(result.key) ? 3 : 2,
       })),
     },
   });
 }
 
 function renderStressTable(stressResults, isReal) {
+  const rows = stressResults.map((result) => {
+    const endValue = formatDisplayValue(isReal, result.endingValue, result.endingValueReal);
+    const worstPoint = Math.min(...result.records.map((r) => formatDisplayValue(isReal, r.endPortfolio, r.endPortfolioReal)));
+    return `
+      <tr>
+        <td><span class="stress-badge">${result.name}</span></td>
+        <td>${result.description}</td>
+        <td>${formatCurrency(endValue)}</td>
+        <td>${formatCurrency(worstPoint)}</td>
+        <td>${result.failureYear ? `Year ${result.failureYear}` : "Survived"}</td>
+        <td>${result.cuts}</td>
+        <td>${result.raises}</td>
+        <td>${result.inflationSkips}</td>
+      </tr>
+    `;
+  }).join("");
+
   els.stressTable.innerHTML = `
-    <div class="stress-table">
-      <table>
-        <thead>
-          <tr>
-            <th>Scenario</th>
-            <th>Description</th>
-            <th>Ending value</th>
-            <th>Worst point</th>
-            <th>Failure year</th>
-            <th>GK cuts</th>
-            <th>GK raises</th>
-            <th>Inflation skips</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${stressResults.map((result) => `
-            <tr>
-              <td><span class="stress-badge">${result.name}</span></td>
-              <td>${result.description}</td>
-              <td>${formatCurrency(formatDisplayValue(isReal, result.endingValue, result.endingValueReal))}</td>
-              <td>${formatCurrency(isReal ? Math.min(...result.records.map((r) => r.endPortfolioReal)) : result.worstValue)}</td>
-              <td>${result.failureYear ? `Year ${result.failureYear}` : "Survived"}</td>
-              <td>${result.cuts}</td>
-              <td>${result.raises}</td>
-              <td>${result.inflationSkips}</td>
-            </tr>
-          `).join("")}
-        </tbody>
-      </table>
-    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Scenario</th>
+          <th>Description</th>
+          <th>Ending value</th>
+          <th>Worst point</th>
+          <th>Failure year</th>
+          <th>GK cuts</th>
+          <th>GK raises</th>
+          <th>Inflation skips</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
   `;
 }
 
@@ -408,7 +438,7 @@ function run() {
   const scenario = buildScenarioFromInputs(inputs);
   state.currentScenario = scenario;
   const monteCarlo = runMonteCarlo(scenario);
-  const medianRun = runSingleSimulation(scenario, {
+  const baseRun = runSingleSimulation(scenario, {
     stockReturns: Array.from({ length: scenario.years }, () => scenario.assumptions.stockReturn),
     bondReturns: Array.from({ length: scenario.years }, () => scenario.assumptions.bondReturn),
   });
@@ -416,14 +446,15 @@ function run() {
   const isReal = els.showRealValues.checked;
 
   els.heroPill.textContent = isReal ? "Real values" : "Nominal values";
+  els.stressScenarioCount.textContent = `${stressTestLibrary.length} scenarios`;
   renderSummary(monteCarlo, isReal);
-  renderStressSummary(monteCarlo);
-  renderCashflowChart(medianRun.records, isReal);
+  renderStressSummary(monteCarlo, stressResults, isReal);
+  renderCashflowChart(baseRun.records, isReal);
   renderPortfolioChart(monteCarlo, isReal);
   renderFailureChart(monteCarlo);
   renderStressChart(stressResults, isReal);
   renderStressTable(stressResults, isReal);
-  renderTable(medianRun.records, els.showFullTimeline.checked, isReal);
+  renderTable(baseRun.records, els.showFullTimeline.checked, isReal);
 }
 
 function initialise() {
