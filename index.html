@@ -6,7 +6,6 @@
   <title>Retirement Simulator V2</title>
 
   <link rel="stylesheet" href="./style.css">
-
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
@@ -48,7 +47,7 @@
 
       <div class="field">
         <label for="monteCarloRuns">Monte Carlo runs</label>
-        <input id="monteCarloRuns" type="number" step="100" min="1" />
+        <input id="monteCarloRuns" type="text" inputmode="numeric" />
       </div>
 
       <div class="field">
@@ -91,10 +90,17 @@
     <div class="button-row">
       <button id="runBtn">Run simulation</button>
       <button id="resetBtn">Reset to defaults</button>
-      <button id="toggleTableBtn">Show full timeline</button>
     </div>
 
     <div id="errorBox" class="error-box"></div>
+  </div>
+
+  <div class="panel">
+    <h2>View options</h2>
+    <div class="button-row">
+      <button id="valueModeBtn">Show real values</button>
+      <button id="toggleTableBtn">Show yearly detail</button>
+    </div>
   </div>
 
   <div id="summary" class="summary-grid"></div>
@@ -114,7 +120,8 @@
     <div id="stressSummary" class="summary-grid"></div>
   </div>
 
-  <div class="section">
+  <div class="section" id="yearlyDetailSection" style="display: none;">
+    <h2>Yearly detail</h2>
     <div id="results-table"></div>
   </div>
 

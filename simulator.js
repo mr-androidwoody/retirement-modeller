@@ -121,6 +121,24 @@ function getPercentile(sortedValues, percentile) {
   return sortedValues[index];
 }
 
+function toRealValue(nominalValue, inflation, yearIndex) {
+  return nominalValue / Math.pow(1 + inflation, yearIndex);
+}
+
+function addRealFieldsToRecord(record, inflation) {
+  const yearIndex = record.year - 1;
+
+  return {
+    ...record,
+    startPortfolioReal: toRealValue(record.startPortfolio, inflation, yearIndex),
+    spendingTargetReal: toRealValue(record.spendingTarget, inflation, yearIndex),
+    statePensionIncomeReal: toRealValue(record.statePensionIncome, inflation, yearIndex),
+    withdrawalReal: toRealValue(record.withdrawal, inflation, yearIndex),
+    totalIncomeReal: toRealValue(record.totalIncome, inflation, yearIndex),
+    endPortfolioReal: toRealValue(record.endPortfolio, inflation, yearIndex)
+  };
+}
+
 export function runSingleSimulation(scenario) {
   validateScenario(scenario);
 
@@ -231,7 +249,7 @@ export function runSingleSimulation(scenario) {
       depleted = true;
     }
 
-    records.push({
+    const record = {
       year: year + 1,
       age1,
       age2,
@@ -244,7 +262,9 @@ export function runSingleSimulation(scenario) {
       returnPct: annualReturn,
       endPortfolio: portfolio,
       events
-    });
+    };
+
+    records.push(addRealFieldsToRecord(record, scenario.inflation));
 
     previousReturn = annualReturn;
   }
@@ -265,7 +285,9 @@ export function runMonteCarlo(scenario) {
   validateScenario(scenario);
 
   const endingValues = [];
+  const endingValuesReal = [];
   const yearlyEndingValues = Array.from({ length: scenario.years }, () => []);
+  const yearlyEndingValuesReal = Array.from({ length: scenario.years }, () => []);
 
   let successes = 0;
   let totalCuts = 0;
@@ -306,15 +328,29 @@ export function runMonteCarlo(scenario) {
     }
 
     endingValues.push(finalYear.endPortfolio);
+    endingValuesReal.push(finalYear.endPortfolioReal);
 
     for (let year = 0; year < records.length; year += 1) {
       yearlyEndingValues[year].push(records[year].endPortfolio);
+      yearlyEndingValuesReal[year].push(records[year].endPortfolioReal);
     }
   }
 
   const sortedEndingValues = [...endingValues].sort((a, b) => a - b);
+  const sortedEndingValuesReal = [...endingValuesReal].sort((a, b) => a - b);
 
   const yearlyPercentiles = yearlyEndingValues.map((values, index) => {
+    const sorted = [...values].sort((a, b) => a - b);
+
+    return {
+      year: index + 1,
+      p10: getPercentile(sorted, 0.1),
+      median: getPercentile(sorted, 0.5),
+      p90: getPercentile(sorted, 0.9)
+    };
+  });
+
+  const yearlyPercentilesReal = yearlyEndingValuesReal.map((values, index) => {
     const sorted = [...values].sort((a, b) => a - b);
 
     return {
@@ -335,10 +371,15 @@ export function runMonteCarlo(scenario) {
     runs: scenario.monteCarloRuns,
     successRate: successes / scenario.monteCarloRuns,
     medianEndingValue: getPercentile(sortedEndingValues, 0.5),
+    medianEndingValueReal: getPercentile(sortedEndingValuesReal, 0.5),
     p10EndingValue: getPercentile(sortedEndingValues, 0.1),
+    p10EndingValueReal: getPercentile(sortedEndingValuesReal, 0.1),
     p90EndingValue: getPercentile(sortedEndingValues, 0.9),
+    p90EndingValueReal: getPercentile(sortedEndingValuesReal, 0.9),
     worstEndingValue: sortedEndingValues[0],
+    worstEndingValueReal: sortedEndingValuesReal[0],
     yearlyPercentiles,
+    yearlyPercentilesReal,
     downside: {
       averageCutsPerRun: totalCuts / scenario.monteCarloRuns,
       averageRaisesPerRun: totalRaises / scenario.monteCarloRuns,

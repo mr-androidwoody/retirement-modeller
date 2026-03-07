@@ -21,14 +21,26 @@ function formatPercent(value, decimals = 1) {
   return `${(value * 100).toFixed(decimals)}%`;
 }
 
-function renderSummary(monteCarlo) {
+function valueLabel(isReal) {
+  return isReal ? "Real (today’s money)" : "Nominal";
+}
+
+function pickValue(isReal, nominal, real) {
+  return isReal ? real : nominal;
+}
+
+function renderSummary(monteCarlo, isReal) {
   const summaryEl = document.getElementById("summary");
   if (!summaryEl) return;
 
   summaryEl.innerHTML = `
     <div class="card">
+      <div class="card-title">Value mode</div>
+      <div class="card-value">${valueLabel(isReal)}</div>
+    </div>
+    <div class="card">
       <div class="card-title">Monte Carlo runs</div>
-      <div class="card-value">${monteCarlo.runs}</div>
+      <div class="card-value">${formatNumberWithCommas(monteCarlo.runs)}</div>
     </div>
     <div class="card">
       <div class="card-title">Success rate</div>
@@ -36,20 +48,26 @@ function renderSummary(monteCarlo) {
     </div>
     <div class="card">
       <div class="card-title">Median ending value</div>
-      <div class="card-value">${formatCurrency(monteCarlo.medianEndingValue)}</div>
+      <div class="card-value">${formatCurrency(
+        pickValue(isReal, monteCarlo.medianEndingValue, monteCarlo.medianEndingValueReal)
+      )}</div>
     </div>
     <div class="card">
       <div class="card-title">P10 ending value</div>
-      <div class="card-value">${formatCurrency(monteCarlo.p10EndingValue)}</div>
+      <div class="card-value">${formatCurrency(
+        pickValue(isReal, monteCarlo.p10EndingValue, monteCarlo.p10EndingValueReal)
+      )}</div>
     </div>
     <div class="card">
       <div class="card-title">P90 ending value</div>
-      <div class="card-value">${formatCurrency(monteCarlo.p90EndingValue)}</div>
+      <div class="card-value">${formatCurrency(
+        pickValue(isReal, monteCarlo.p90EndingValue, monteCarlo.p90EndingValueReal)
+      )}</div>
     </div>
   `;
 }
 
-function renderStressSummary(monteCarlo) {
+function renderStressSummary(monteCarlo, isReal) {
   const stressEl = document.getElementById("stressSummary");
   if (!stressEl) return;
 
@@ -66,7 +84,9 @@ function renderStressSummary(monteCarlo) {
   stressEl.innerHTML = `
     <div class="card">
       <div class="card-title">Worst ending value</div>
-      <div class="card-value">${formatCurrency(monteCarlo.worstEndingValue)}</div>
+      <div class="card-value">${formatCurrency(
+        pickValue(isReal, monteCarlo.worstEndingValue, monteCarlo.worstEndingValueReal)
+      )}</div>
     </div>
     <div class="card">
       <div class="card-title">Average GK cuts per run</div>
@@ -91,29 +111,35 @@ function renderStressSummary(monteCarlo) {
   `;
 }
 
-function renderTable(records, showFullTimeline) {
+function renderTable(records, showFullTimeline, isReal) {
   const tableEl = document.getElementById("results-table");
   if (!tableEl) return;
 
   const rowsToShow = showFullTimeline ? records : records.slice(0, 10);
 
   const rows = rowsToShow
-    .map(
-      (row) => `
+    .map((row) => {
+      const startPortfolio = isReal ? row.startPortfolioReal : row.startPortfolio;
+      const spendingTarget = isReal ? row.spendingTargetReal : row.spendingTarget;
+      const statePensionIncome = isReal ? row.statePensionIncomeReal : row.statePensionIncome;
+      const withdrawal = isReal ? row.withdrawalReal : row.withdrawal;
+      const endPortfolio = isReal ? row.endPortfolioReal : row.endPortfolio;
+
+      return `
         <tr>
           <td>${row.year}</td>
           <td>${row.age1}</td>
           <td>${row.age2}</td>
-          <td>${formatCurrency(row.startPortfolio)}</td>
-          <td>${formatCurrency(row.spendingTarget)}</td>
-          <td>${formatCurrency(row.statePensionIncome)}</td>
-          <td>${formatCurrency(row.withdrawal)}</td>
+          <td>${formatCurrency(startPortfolio)}</td>
+          <td>${formatCurrency(spendingTarget)}</td>
+          <td>${formatCurrency(statePensionIncome)}</td>
+          <td>${formatCurrency(withdrawal)}</td>
           <td>${formatPercent(row.returnPct)}</td>
-          <td>${formatCurrency(row.endPortfolio)}</td>
+          <td>${formatCurrency(endPortfolio)}</td>
           <td>${row.events.join(", ")}</td>
         </tr>
-      `
-    )
+      `;
+    })
     .join("");
 
   tableEl.innerHTML = `
@@ -148,7 +174,7 @@ function buildChart(canvasId, config) {
   return new Chart(canvas, config);
 }
 
-function renderCashflowChart(records) {
+function renderCashflowChart(records, isReal) {
   if (cashflowChartInstance) {
     cashflowChartInstance.destroy();
   }
@@ -160,17 +186,17 @@ function renderCashflowChart(records) {
       datasets: [
         {
           label: "Total household spending",
-          data: records.map((r) => r.spendingTarget),
+          data: records.map((r) => (isReal ? r.spendingTargetReal : r.spendingTarget)),
           borderWidth: 2
         },
         {
           label: "State pension income",
-          data: records.map((r) => r.statePensionIncome),
+          data: records.map((r) => (isReal ? r.statePensionIncomeReal : r.statePensionIncome)),
           borderWidth: 2
         },
         {
           label: "Portfolio withdrawals",
-          data: records.map((r) => r.withdrawal),
+          data: records.map((r) => (isReal ? r.withdrawalReal : r.withdrawal)),
           borderWidth: 2
         }
       ]
@@ -192,29 +218,31 @@ function renderCashflowChart(records) {
   });
 }
 
-function renderPortfolioChart(yearlyPercentiles) {
+function renderPortfolioChart(monteCarlo, isReal) {
   if (portfolioChartInstance) {
     portfolioChartInstance.destroy();
   }
 
+  const series = isReal ? monteCarlo.yearlyPercentilesReal : monteCarlo.yearlyPercentiles;
+
   portfolioChartInstance = buildChart("portfolioChart", {
     type: "line",
     data: {
-      labels: yearlyPercentiles.map((r) => `Year ${r.year}`),
+      labels: series.map((r) => `Year ${r.year}`),
       datasets: [
         {
           label: "P10 portfolio",
-          data: yearlyPercentiles.map((r) => r.p10),
+          data: series.map((r) => r.p10),
           borderWidth: 2
         },
         {
           label: "Median portfolio",
-          data: yearlyPercentiles.map((r) => r.median),
+          data: series.map((r) => r.median),
           borderWidth: 2
         },
         {
           label: "P90 portfolio",
-          data: yearlyPercentiles.map((r) => r.p90),
+          data: series.map((r) => r.p90),
           borderWidth: 2
         }
       ]
@@ -252,7 +280,7 @@ function populateInputs(scenario) {
   setInputValue("stockAllocationSlider", stockPct);
   setInputValue("bondAllocation", bondPct);
   setInputValue("years", scenario.years);
-  setInputValue("monteCarloRuns", scenario.monteCarloRuns);
+  setInputValue("monteCarloRuns", formatNumberWithCommas(scenario.monteCarloRuns));
   setInputValue("seed", scenario.seed);
   setInputValue("inflation", scenario.inflation * 100);
   setInputValue("person1Age", scenario.person1Age);
@@ -360,9 +388,8 @@ function enableCommaFormatting(id) {
     const integerPart = parts[0];
     const decimalPart = parts[1];
 
-    const formattedInteger = integerPart === ""
-      ? ""
-      : Number(integerPart).toLocaleString("en-GB");
+    const formattedInteger =
+      integerPart === "" ? "" : Number(integerPart).toLocaleString("en-GB");
 
     input.value =
       decimalPart !== undefined
@@ -410,6 +437,27 @@ function wireUpSliders() {
 
 window.addEventListener("DOMContentLoaded", () => {
   let showFullTimeline = false;
+  let isReal = false;
+
+  function updateButtons() {
+    const valueModeBtn = document.getElementById("valueModeBtn");
+    const toggleTableBtn = document.getElementById("toggleTableBtn");
+    const yearlyDetailSection = document.getElementById("yearlyDetailSection");
+
+    if (valueModeBtn) {
+      valueModeBtn.textContent = isReal ? "Show nominal values" : "Show real values";
+    }
+
+    if (toggleTableBtn) {
+      toggleTableBtn.textContent = showFullTimeline
+        ? "Hide yearly detail"
+        : "Show yearly detail";
+    }
+
+    if (yearlyDetailSection) {
+      yearlyDetailSection.style.display = showFullTimeline ? "block" : "none";
+    }
+  }
 
   function runFromInputs() {
     try {
@@ -423,11 +471,16 @@ window.addEventListener("DOMContentLoaded", () => {
       const singleResult = runSingleSimulation(scenario);
       const monteCarlo = runMonteCarlo(scenario);
 
-      renderSummary(monteCarlo);
-      renderStressSummary(monteCarlo);
-      renderCashflowChart(singleResult.records);
-      renderPortfolioChart(monteCarlo.yearlyPercentiles);
-      renderTable(singleResult.records, showFullTimeline);
+      renderSummary(monteCarlo, isReal);
+      renderStressSummary(monteCarlo, isReal);
+      renderCashflowChart(singleResult.records, isReal);
+      renderPortfolioChart(monteCarlo, isReal);
+
+      if (showFullTimeline) {
+        renderTable(singleResult.records, true, isReal);
+      }
+
+      updateButtons();
     } catch (error) {
       showError(error.message);
     }
@@ -440,6 +493,7 @@ window.addEventListener("DOMContentLoaded", () => {
   enableCommaFormatting("startPortfolio");
   enableCommaFormatting("annualSpending");
   enableCommaFormatting("statePensionToday");
+  enableCommaFormatting("monteCarloRuns");
 
   runFromInputs();
 
@@ -457,13 +511,18 @@ window.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  const toggleBtn = document.getElementById("toggleTableBtn");
-  if (toggleBtn) {
-    toggleBtn.addEventListener("click", () => {
+  const toggleTableBtn = document.getElementById("toggleTableBtn");
+  if (toggleTableBtn) {
+    toggleTableBtn.addEventListener("click", () => {
       showFullTimeline = !showFullTimeline;
-      toggleBtn.textContent = showFullTimeline
-        ? "Show first 10 years"
-        : "Show full timeline";
+      runFromInputs();
+    });
+  }
+
+  const valueModeBtn = document.getElementById("valueModeBtn");
+  if (valueModeBtn) {
+    valueModeBtn.addEventListener("click", () => {
+      isReal = !isReal;
       runFromInputs();
     });
   }
