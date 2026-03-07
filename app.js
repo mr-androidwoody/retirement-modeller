@@ -1,62 +1,254 @@
 import { defaultScenario } from "./scenarios.js";
 import { runSingleSimulation, runMonteCarlo } from "./simulator.js";
 
-window.addEventListener("DOMContentLoaded", () => {
-  const single = runSingleSimulation(defaultScenario);
-  const monteCarlo = runMonteCarlo(defaultScenario);
+function formatCurrency(value) {
+  return `£${Math.round(value).toLocaleString("en-GB")}`;
+}
 
+function formatPercent(value, decimals = 1) {
+  return `${(value * 100).toFixed(decimals)}%`;
+}
+
+function renderSummary(monteCarlo) {
   const summaryEl = document.getElementById("summary");
-  const tableEl = document.getElementById("results-table");
 
-  if (summaryEl) {
-    summaryEl.innerHTML = `
-      <p><strong>Monte Carlo runs:</strong> ${monteCarlo.runs}</p>
-      <p><strong>Success rate:</strong> ${(monteCarlo.successRate * 100).toFixed(1)}%</p>
-      <p><strong>Median ending value:</strong> £${Math.round(monteCarlo.medianEndingValue).toLocaleString("en-GB")}</p>
-      <p><strong>P10 ending value:</strong> £${Math.round(monteCarlo.p10EndingValue).toLocaleString("en-GB")}</p>
-      <p><strong>P90 ending value:</strong> £${Math.round(monteCarlo.p90EndingValue).toLocaleString("en-GB")}</p>
-    `;
+  if (!summaryEl) return;
+
+  summaryEl.innerHTML = `
+    <div class="card">
+      <div class="card-title">Monte Carlo runs</div>
+      <div class="card-value">${monteCarlo.runs}</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Success rate</div>
+      <div class="card-value">${formatPercent(monteCarlo.successRate)}</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Median ending value</div>
+      <div class="card-value">${formatCurrency(monteCarlo.medianEndingValue)}</div>
+    </div>
+    <div class="card">
+      <div class="card-title">P10 ending value</div>
+      <div class="card-value">${formatCurrency(monteCarlo.p10EndingValue)}</div>
+    </div>
+    <div class="card">
+      <div class="card-title">P90 ending value</div>
+      <div class="card-value">${formatCurrency(monteCarlo.p90EndingValue)}</div>
+    </div>
+  `;
+}
+
+function renderTable(records, showFullTimeline) {
+  const tableEl = document.getElementById("results-table");
+  if (!tableEl) return;
+
+  const rowsToShow = showFullTimeline ? records : records.slice(0, 10);
+
+  const rows = rowsToShow
+    .map(
+      (row) => `
+        <tr>
+          <td>${row.year}</td>
+          <td>${row.age1}</td>
+          <td>${row.age2}</td>
+          <td>${formatCurrency(row.startPortfolio)}</td>
+          <td>${formatCurrency(row.spendingTarget)}</td>
+          <td>${formatCurrency(row.statePensionIncome)}</td>
+          <td>${formatCurrency(row.withdrawal)}</td>
+          <td>${formatPercent(row.returnPct)}</td>
+          <td>${formatCurrency(row.endPortfolio)}</td>
+          <td>${row.events.join(", ")}</td>
+        </tr>
+      `
+    )
+    .join("");
+
+  tableEl.innerHTML = `
+    <table>
+      <thead>
+        <tr>
+          <th>Year</th>
+          <th>Age 1</th>
+          <th>Age 2</th>
+          <th>Start Portfolio</th>
+          <th>Spending Target</th>
+          <th>State Pension</th>
+          <th>Withdrawal</th>
+          <th>Return</th>
+          <th>End Portfolio</th>
+          <th>Events</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+let cashflowChartInstance = null;
+let portfolioChartInstance = null;
+let ruinChartInstance = null;
+
+function renderCashflowChart(records) {
+  const canvas = document.getElementById("cashflowChart");
+  if (!canvas) return;
+
+  if (cashflowChartInstance) {
+    cashflowChartInstance.destroy();
   }
 
-  if (tableEl) {
-    const rows = single
-      .slice(0, 10)
-      .map(
-        (row) => `
-          <tr>
-            <td>${row.year}</td>
-            <td>${row.age1}</td>
-            <td>${row.age2}</td>
-            <td>£${Math.round(row.startPortfolio).toLocaleString("en-GB")}</td>
-            <td>£${Math.round(row.spendingTarget).toLocaleString("en-GB")}</td>
-            <td>£${Math.round(row.statePensionIncome).toLocaleString("en-GB")}</td>
-            <td>£${Math.round(row.withdrawal).toLocaleString("en-GB")}</td>
-            <td>${(row.returnPct * 100).toFixed(1)}%</td>
-            <td>£${Math.round(row.endPortfolio).toLocaleString("en-GB")}</td>
-            <td>${row.events.join(", ")}</td>
-          </tr>
-        `
-      )
-      .join("");
+  cashflowChartInstance = new Chart(canvas, {
+    type: "line",
+    data: {
+      labels: records.map((r) => `Year ${r.year}`),
+      datasets: [
+        {
+          label: "Total household spending",
+          data: records.map((r) => r.spendingTarget),
+          borderWidth: 2,
+          tension: 0.2
+        },
+        {
+          label: "State pension income",
+          data: records.map((r) => r.statePensionIncome),
+          borderWidth: 2,
+          tension: 0.2
+        },
+        {
+          label: "Portfolio withdrawals",
+          data: records.map((r) => r.withdrawal),
+          borderWidth: 2,
+          tension: 0.2
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          position: "top"
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true
+        }
+      }
+    }
+  });
+}
 
-    tableEl.innerHTML = `
-      <table border="1" cellpadding="6" cellspacing="0">
-        <thead>
-          <tr>
-            <th>Year</th>
-            <th>Age 1</th>
-            <th>Age 2</th>
-            <th>Start Portfolio</th>
-            <th>Spending Target</th>
-            <th>State Pension</th>
-            <th>Withdrawal</th>
-            <th>Return</th>
-            <th>End Portfolio</th>
-            <th>Events</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    `;
+function renderPortfolioChart(yearlyPercentiles) {
+  const canvas = document.getElementById("portfolioChart");
+  if (!canvas) return;
+
+  if (portfolioChartInstance) {
+    portfolioChartInstance.destroy();
+  }
+
+  portfolioChartInstance = new Chart(canvas, {
+    type: "line",
+    data: {
+      labels: yearlyPercentiles.map((r) => `Year ${r.year}`),
+      datasets: [
+        {
+          label: "P10 portfolio",
+          data: yearlyPercentiles.map((r) => r.p10),
+          borderWidth: 2,
+          tension: 0.2
+        },
+        {
+          label: "Median portfolio",
+          data: yearlyPercentiles.map((r) => r.median),
+          borderWidth: 2,
+          tension: 0.2
+        },
+        {
+          label: "P90 portfolio",
+          data: yearlyPercentiles.map((r) => r.p90),
+          borderWidth: 2,
+          tension: 0.2
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          position: "top"
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true
+        }
+      }
+    }
+  });
+}
+
+function renderRuinChart(depletionProbabilityByYear) {
+  const canvas = document.getElementById("ruinChart");
+  if (!canvas) return;
+
+  if (ruinChartInstance) {
+    ruinChartInstance.destroy();
+  }
+
+  ruinChartInstance = new Chart(canvas, {
+    type: "line",
+    data: {
+      labels: depletionProbabilityByYear.map((r) => `Year ${r.year}`),
+      datasets: [
+        {
+          label: "Probability of depletion",
+          data: depletionProbabilityByYear.map((r) => r.probability * 100),
+          borderWidth: 2,
+          tension: 0.2
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: {
+          position: "top"
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          max: 100,
+          ticks: {
+            callback(value) {
+              return `${value}%`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  const singleResult = runSingleSimulation(defaultScenario);
+  const monteCarlo = runMonteCarlo(defaultScenario);
+
+  let showFullTimeline = false;
+
+  renderSummary(monteCarlo);
+  renderCashflowChart(singleResult.records);
+  renderPortfolioChart(monteCarlo.yearlyPercentiles);
+  renderRuinChart(monteCarlo.depletionProbabilityByYear);
+  renderTable(singleResult.records, showFullTimeline);
+
+  const toggleBtn = document.getElementById("toggleTableBtn");
+  if (toggleBtn) {
+    toggleBtn.addEventListener("click", () => {
+      showFullTimeline = !showFullTimeline;
+      toggleBtn.textContent = showFullTimeline
+        ? "Show first 10 years"
+        : "Show full timeline";
+      renderTable(singleResult.records, showFullTimeline);
+    });
   }
 });

@@ -114,6 +114,13 @@ function validateScenario(scenario) {
   }
 }
 
+function getPercentile(sortedValues, percentile) {
+  if (sortedValues.length === 0) return 0;
+
+  const index = Math.floor(percentile * (sortedValues.length - 1));
+  return sortedValues[index];
+}
+
 export function runSingleSimulation(scenario) {
   validateScenario(scenario);
 
@@ -126,6 +133,7 @@ export function runSingleSimulation(scenario) {
   let spendingTarget = scenario.annualSpending;
   let previousReturn = null;
   let depleted = false;
+  let depletionYear = null;
 
   for (let year = 0; year < scenario.years; year += 1) {
     const age1 = scenario.person1Age + year;
@@ -177,7 +185,7 @@ export function runSingleSimulation(scenario) {
     });
 
     const statePensionIncome = statePension1 + statePension2;
-    const withdrawal = Math.max(0, spendingTarget - statePensionIncome);
+    const requiredWithdrawal = Math.max(0, spendingTarget - statePensionIncome);
 
     if (statePension1 > 0) {
       events.push("STATE_PENSION_1_ACTIVE");
@@ -187,19 +195,28 @@ export function runSingleSimulation(scenario) {
       events.push("STATE_PENSION_2_ACTIVE");
     }
 
-    const actualWithdrawal = Math.min(withdrawal, portfolio);
+    const actualWithdrawal = Math.min(requiredWithdrawal, portfolio);
     portfolio -= actualWithdrawal;
 
-    if (withdrawal > actualWithdrawal) {
-      depleted = true;
+    let fullSpendingMet = true;
+
+    if (requiredWithdrawal > actualWithdrawal) {
+      fullSpendingMet = false;
       events.push("PARTIAL_SPENDING_ONLY");
     }
 
-    const annualReturn = depleted ? 0 : getAnnualReturn(scenario, rng);
+    const annualReturn = portfolio > 0 ? getAnnualReturn(scenario, rng) : 0;
     portfolio *= 1 + annualReturn;
 
-    if (portfolio < 0) {
+    if (portfolio <= 0) {
       portfolio = 0;
+
+      if (depletionYear === null) {
+        depletionYear = year + 1;
+        events.push("PORTFOLIO_DEPLETED");
+      }
+
+      depleted = true;
     }
 
     records.push({
@@ -211,32 +228,31 @@ export function runSingleSimulation(scenario) {
       statePensionIncome,
       withdrawal: actualWithdrawal,
       totalIncome: actualWithdrawal + statePensionIncome,
+      fullSpendingMet,
       returnPct: annualReturn,
       endPortfolio: portfolio,
       events
     });
 
     previousReturn = annualReturn;
-
-    if (portfolio <= 0) {
-      depleted = true;
-    }
   }
 
-  return records;
-}
-
-function getPercentile(sortedValues, percentile) {
-  if (sortedValues.length === 0) return 0;
-
-  const index = Math.floor(percentile * (sortedValues.length - 1));
-  return sortedValues[index];
+  return {
+    records,
+    summary: {
+      depleted,
+      depletionYear
+    }
+  };
 }
 
 export function runMonteCarlo(scenario) {
   validateScenario(scenario);
 
   const endingValues = [];
+  const yearlyEndingValues = Array.from({ length: scenario.years }, () => []);
+  const depletionCountsByYear = Array.from({ length: scenario.years }, () => 0);
+
   let successes = 0;
 
   for (let i = 0; i < scenario.monteCarloRuns; i += 1) {
@@ -245,21 +261,54 @@ export function runMonteCarlo(scenario) {
       seed: scenario.seed + i
     };
 
-    const results = runSingleSimulation(scenarioForRun);
-    const finalYear = results[results.length - 1];
-    const succeeded = finalYear.endPortfolio > 0;
+    const result = runSingleSimulation(scenarioForRun);
+    const { records, summary } = result;
+    const finalYear = records[records.length - 1];
 
-    if (succeeded) successes += 1;
+    const succeeded = !summary.depleted;
+
+    if (succeeded) {
+      successes += 1;
+    }
+
     endingValues.push(finalYear.endPortfolio);
+
+    for (let year = 0; year < records.length; year += 1) {
+      yearlyEndingValues[year].push(records[year].endPortfolio);
+    }
+
+    if (summary.depletionYear !== null) {
+      for (let year = summary.depletionYear - 1; year < scenario.years; year += 1) {
+        depletionCountsByYear[year] += 1;
+      }
+    }
   }
 
   const sortedEndingValues = [...endingValues].sort((a, b) => a - b);
+
+  const yearlyPercentiles = yearlyEndingValues.map((values, index) => {
+    const sorted = [...values].sort((a, b) => a - b);
+
+    return {
+      year: index + 1,
+      p10: getPercentile(sorted, 0.1),
+      median: getPercentile(sorted, 0.5),
+      p90: getPercentile(sorted, 0.9)
+    };
+  });
+
+  const depletionProbabilityByYear = depletionCountsByYear.map((count, index) => ({
+    year: index + 1,
+    probability: count / scenario.monteCarloRuns
+  }));
 
   return {
     runs: scenario.monteCarloRuns,
     successRate: successes / scenario.monteCarloRuns,
     medianEndingValue: getPercentile(sortedEndingValues, 0.5),
     p10EndingValue: getPercentile(sortedEndingValues, 0.1),
-    p90EndingValue: getPercentile(sortedEndingValues, 0.9)
+    p90EndingValue: getPercentile(sortedEndingValues, 0.9),
+    yearlyPercentiles,
+    depletionProbabilityByYear
   };
 }
