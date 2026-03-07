@@ -1,34 +1,74 @@
 export const defaultScenario = {
-  startPortfolio: 1000000,
+  startPortfolio: 1_000_000,
   years: 40,
-
-  stockAllocation: 0.6,
-  bondAllocation: 0.4,
-
-  annualSpending: 40000,
+  stockAllocation: 0.60,
+  bondAllocation: 0.40,
+  annualSpending: 40_000,
   inflation: 0.025,
-
-  statePensionToday: 12547,
+  statePensionToday: 12_547,
   person1Age: 57,
   person2Age: 58,
   person1StatePensionAge: 67,
   person2StatePensionAge: 67,
-
-  monteCarloRuns: 1000,
+  monteCarloRuns: 5000,
   seed: 12345,
-
   rules: {
     upperGuardrail: 1.2,
     lowerGuardrail: 0.8,
     cutPct: 0.1,
     raisePct: 0.1,
-    skipInflationAfterNegativeReturn: true
+    skipInflationAfterNegativeReturn: true,
   },
-
   assumptions: {
     stockReturn: 0.07,
     stockVol: 0.18,
     bondReturn: 0.02,
-    bondVol: 0.06
-  }
+    bondVol: 0.06,
+  },
 };
+
+export const stressTestLibrary = [
+  {
+    key: "early-crash",
+    name: "Early crash",
+    description: "Severe losses hit in the first five years, then normal returns resume.",
+    stockReturns: [-0.28, -0.18, -0.08, 0.06, 0.10],
+    bondReturns: [0.03, 0.04, 0.02, 0.01, 0.02],
+  },
+  {
+    key: "lost-decade",
+    name: "Lost decade",
+    description: "Muted and choppy returns for ten years before a normal regime returns.",
+    stockReturns: [-0.12, 0.04, -0.09, 0.03, -0.04, 0.05, 0.01, -0.03, 0.06, 0.02],
+    bondReturns: [0.04, 0.03, 0.05, 0.02, 0.03, 0.03, 0.02, 0.02, 0.03, 0.03],
+  },
+  {
+    key: "inflation-shock",
+    name: "Inflation shock",
+    description: "High inflation and poor real returns in the opening years.",
+    stockReturns: [-0.16, -0.08, 0.02, 0.03, 0.04],
+    bondReturns: [-0.10, -0.06, -0.01, 0.01, 0.02],
+    inflationPath: [0.075, 0.065, 0.05, 0.04, 0.03],
+  },
+  {
+    key: "bond-shock",
+    name: "Bond shock",
+    description: "Equities are fine but bonds suffer a sharp drawdown early on.",
+    stockReturns: [0.08, 0.07, 0.06, 0.07, 0.07],
+    bondReturns: [-0.15, -0.08, -0.02, 0.01, 0.02],
+  },
+  {
+    key: "late-crash",
+    name: "Late crash",
+    description: "Portfolio grows first, then takes a major hit later in retirement.",
+    stockReturns: [0.08, 0.09, 0.07, 0.08, 0.07, 0.08, 0.07, -0.22, -0.15, -0.08],
+    bondReturns: [0.02, 0.03, 0.02, 0.03, 0.02, 0.02, 0.02, 0.03, 0.03, 0.02],
+  },
+  {
+    key: "reverse-order",
+    name: "Reverse order",
+    description: "The same return set as a good path, but with poor years dragged to the front.",
+    stockReturns: [-0.18, -0.12, -0.05, 0.03, 0.06, 0.09, 0.12, 0.14],
+    bondReturns: [0.04, 0.03, 0.03, 0.03, 0.02, 0.02, 0.02, 0.02],
+  },
+];

@@ -1,391 +1,248 @@
-function createSeededRng(seed) {
-  let state = seed >>> 0;
+import { stressTestLibrary } from "./scenarios.js";
 
-  return function rng() {
-    state = (1664525 * state + 1013904223) >>> 0;
-    return state / 4294967296;
+function mulberry32(seed) {
+  let t = seed >>> 0;
+  return function () {
+    t += 0x6d2b79f5;
+    let r = Math.imul(t ^ (t >>> 15), t | 1);
+    r ^= r + Math.imul(r ^ (r >>> 7), r | 61);
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
   };
 }
 
-function randomNormal(rng) {
+function normalFromUniform(rng) {
   let u = 0;
   let v = 0;
-
   while (u === 0) u = rng();
   while (v === 0) v = rng();
-
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 
-function getAnnualReturn(scenario, rng) {
-  const {
-    stockAllocation,
-    bondAllocation,
-    assumptions: { stockReturn, stockVol, bondReturn, bondVol }
-  } = scenario;
-
-  const stockRnd = randomNormal(rng);
-  const bondRnd = randomNormal(rng);
-
-  const stockAnnual = stockReturn + stockVol * stockRnd;
-  const bondAnnual = bondReturn + bondVol * bondRnd;
-
-  return stockAllocation * stockAnnual + bondAllocation * bondAnnual;
+function quantile(sortedValues, p) {
+  if (!sortedValues.length) return 0;
+  const idx = (sortedValues.length - 1) * p;
+  const low = Math.floor(idx);
+  const high = Math.ceil(idx);
+  if (low === high) return sortedValues[low];
+  const weight = idx - low;
+  return sortedValues[low] * (1 - weight) + sortedValues[high] * weight;
 }
 
-function getInflationAdjustedSpending(previousSpending, inflation) {
-  return previousSpending * (1 + inflation);
+function percentileByYear(paths, p) {
+  if (!paths.length) return [];
+  const years = paths[0].length;
+  const result = [];
+  for (let i = 0; i < years; i += 1) {
+    const sorted = paths.map((path) => path[i]).sort((a, b) => a - b);
+    result.push(quantile(sorted, p));
+  }
+  return result;
 }
 
-function getInitialWithdrawalRate(scenario) {
-  return scenario.annualSpending / scenario.startPortfolio;
+function blendedReturn(stockAllocation, stockReturn, bondReturn) {
+  return stockAllocation * stockReturn + (1 - stockAllocation) * bondReturn;
 }
 
-function applyGuardrails({
-  currentSpending,
-  currentPortfolio,
-  initialWithdrawalRate,
-  rules
-}) {
-  if (currentPortfolio <= 0) {
-    return {
-      spending: currentSpending,
-      events: ["PORTFOLIO_DEPLETED"]
-    };
-  }
-
-  const currentWithdrawalRate = currentSpending / currentPortfolio;
-  const upperLimit = initialWithdrawalRate * rules.upperGuardrail;
-  const lowerLimit = initialWithdrawalRate * rules.lowerGuardrail;
-
-  const events = [];
-  let spending = currentSpending;
-
-  if (currentWithdrawalRate > upperLimit) {
-    spending = currentSpending * (1 - rules.cutPct);
-    events.push("GK_CUT");
-  } else if (currentWithdrawalRate < lowerLimit) {
-    spending = currentSpending * (1 + rules.raisePct);
-    events.push("GK_RAISE");
-  }
-
-  return { spending, events };
+function realValue(nominal, inflationFactor) {
+  return nominal / inflationFactor;
 }
 
-function getStatePensionForYear({
-  currentAge,
-  statePensionAge,
-  statePensionToday,
-  inflation,
-  yearIndex
-}) {
-  if (currentAge + yearIndex < statePensionAge) {
-    return 0;
-  }
-
-  return statePensionToday * Math.pow(1 + inflation, yearIndex);
-}
-
-function validateScenario(scenario) {
-  const allocationTotal = scenario.stockAllocation + scenario.bondAllocation;
-
-  if (Math.abs(allocationTotal - 1) > 0.000001) {
-    throw new Error("Stock and bond allocations must sum to 1");
-  }
-
-  if (scenario.startPortfolio <= 0) {
-    throw new Error("Start portfolio must be greater than 0");
-  }
-
-  if (scenario.years <= 0) {
-    throw new Error("Years must be greater than 0");
-  }
-
-  if (scenario.monteCarloRuns <= 0) {
-    throw new Error("Monte Carlo runs must be greater than 0");
-  }
-
-  if (scenario.person1StatePensionAge < scenario.person1Age) {
-    throw new Error("Person 1 state pension age cannot be below current age");
-  }
-
-  if (scenario.person2StatePensionAge < scenario.person2Age) {
-    throw new Error("Person 2 state pension age cannot be below current age");
-  }
-}
-
-function getPercentile(sortedValues, percentile) {
-  if (sortedValues.length === 0) return 0;
-
-  const index = Math.floor(percentile * (sortedValues.length - 1));
-  return sortedValues[index];
-}
-
-function toRealValue(nominalValue, inflation, yearIndex) {
-  return nominalValue / Math.pow(1 + inflation, yearIndex);
-}
-
-function addRealFieldsToRecord(record, inflation) {
-  const yearIndex = record.year - 1;
-
+export function buildScenarioFromInputs(inputs) {
   return {
-    ...record,
-    startPortfolioReal: toRealValue(record.startPortfolio, inflation, yearIndex),
-    spendingTargetReal: toRealValue(record.spendingTarget, inflation, yearIndex),
-    statePensionIncomeReal: toRealValue(record.statePensionIncome, inflation, yearIndex),
-    withdrawalReal: toRealValue(record.withdrawal, inflation, yearIndex),
-    totalIncomeReal: toRealValue(record.totalIncome, inflation, yearIndex),
-    endPortfolioReal: toRealValue(record.endPortfolio, inflation, yearIndex)
+    startPortfolio: inputs.startPortfolio,
+    years: inputs.years,
+    stockAllocation: inputs.stockAllocation / 100,
+    bondAllocation: inputs.bondAllocation / 100,
+    annualSpending: inputs.annualSpending,
+    inflation: inputs.inflation / 100,
+    statePensionToday: inputs.statePensionToday,
+    person1Age: inputs.person1Age,
+    person2Age: inputs.person2Age,
+    person1StatePensionAge: inputs.person1StatePensionAge,
+    person2StatePensionAge: inputs.person2StatePensionAge,
+    monteCarloRuns: inputs.monteCarloRuns,
+    seed: inputs.seed,
+    rules: {
+      upperGuardrail: inputs.upperGuardrail,
+      lowerGuardrail: inputs.lowerGuardrail,
+      cutPct: inputs.cutPct / 100,
+      raisePct: inputs.raisePct / 100,
+      skipInflationAfterNegativeReturn: inputs.skipInflationAfterNegativeReturn,
+    },
+    assumptions: {
+      stockReturn: inputs.stockReturn / 100,
+      stockVol: inputs.stockVol / 100,
+      bondReturn: inputs.bondReturn / 100,
+      bondVol: inputs.bondVol / 100,
+    },
   };
 }
 
-export function runSingleSimulation(scenario) {
-  validateScenario(scenario);
-
-  const rng = createSeededRng(scenario.seed);
-  const initialWithdrawalRate = getInitialWithdrawalRate(scenario);
-
+export function runSingleSimulation(scenario, customPath = null) {
   const records = [];
+  const portfolioPath = [];
+  const failureProbabilityPath = [];
 
   let portfolio = scenario.startPortfolio;
-  let spendingTarget = scenario.annualSpending;
+  let annualSpending = scenario.annualSpending;
+  let inflationFactor = 1;
   let previousReturn = null;
-  let depleted = false;
-  let depletionYear = null;
-  let cutCount = 0;
-  let raiseCount = 0;
-  let inflationSkipCount = 0;
+  let cuts = 0;
+  let raises = 0;
+  let inflationSkips = 0;
+  let failureYear = null;
 
-  for (let year = 0; year < scenario.years; year += 1) {
-    const age1 = scenario.person1Age + year;
-    const age2 = scenario.person2Age + year;
-
-    const startPortfolio = portfolio;
+  for (let year = 1; year <= scenario.years; year += 1) {
+    const age1 = scenario.person1Age + (year - 1);
+    const age2 = scenario.person2Age + (year - 1);
     const events = [];
+    const startPortfolio = portfolio;
 
-    if (year > 0) {
-      const shouldSkipInflation =
-        scenario.rules.skipInflationAfterNegativeReturn &&
-        previousReturn !== null &&
-        previousReturn < 0;
+    const inflationRate = customPath?.inflationPath?.[year - 1] ?? scenario.inflation;
+    const pensionPerPerson = scenario.statePensionToday * inflationFactor;
+    const statePensionIncome =
+      (age1 >= scenario.person1StatePensionAge ? pensionPerPerson : 0) +
+      (age2 >= scenario.person2StatePensionAge ? pensionPerPerson : 0);
 
-      if (shouldSkipInflation) {
-        events.push("INFLATION_SKIPPED");
-        inflationSkipCount += 1;
+    if (year > 1) {
+      if (!(scenario.rules.skipInflationAfterNegativeReturn && previousReturn !== null && previousReturn < 0)) {
+        annualSpending *= 1 + inflationRate;
       } else {
-        spendingTarget = getInflationAdjustedSpending(
-          spendingTarget,
-          scenario.inflation
-        );
+        inflationSkips += 1;
+        events.push("Inflation skipped");
       }
     }
 
-    const guardrailResult = applyGuardrails({
-      currentSpending: spendingTarget,
-      currentPortfolio: startPortfolio,
-      initialWithdrawalRate,
-      rules: scenario.rules
-    });
+    const withdrawalRate = startPortfolio > 0 ? annualSpending / startPortfolio : Infinity;
+    const baseRate = scenario.annualSpending / scenario.startPortfolio;
 
-    spendingTarget = guardrailResult.spending;
-    events.push(...guardrailResult.events);
-
-    if (guardrailResult.events.includes("GK_CUT")) {
-      cutCount += 1;
+    if (withdrawalRate > baseRate * scenario.rules.upperGuardrail) {
+      annualSpending *= 1 - scenario.rules.cutPct;
+      cuts += 1;
+      events.push("GK cut");
+    } else if (withdrawalRate < baseRate * scenario.rules.lowerGuardrail) {
+      annualSpending *= 1 + scenario.rules.raisePct;
+      raises += 1;
+      events.push("GK raise");
     }
 
-    if (guardrailResult.events.includes("GK_RAISE")) {
-      raiseCount += 1;
+    const withdrawal = Math.max(annualSpending - statePensionIncome, 0);
+    const stockReturn = customPath?.stockReturns?.[year - 1] ?? scenario.assumptions.stockReturn;
+    const bondReturn = customPath?.bondReturns?.[year - 1] ?? scenario.assumptions.bondReturn;
+    const portfolioReturn = blendedReturn(scenario.stockAllocation, stockReturn, bondReturn);
+    const endPortfolio = Math.max((startPortfolio - withdrawal) * (1 + portfolioReturn), 0);
+
+    if (endPortfolio === 0 && failureYear === null) {
+      failureYear = year;
+      events.push("Depleted");
     }
 
-    const statePension1 = getStatePensionForYear({
-      currentAge: scenario.person1Age,
-      statePensionAge: scenario.person1StatePensionAge,
-      statePensionToday: scenario.statePensionToday,
-      inflation: scenario.inflation,
-      yearIndex: year
-    });
-
-    const statePension2 = getStatePensionForYear({
-      currentAge: scenario.person2Age,
-      statePensionAge: scenario.person2StatePensionAge,
-      statePensionToday: scenario.statePensionToday,
-      inflation: scenario.inflation,
-      yearIndex: year
-    });
-
-    const statePensionIncome = statePension1 + statePension2;
-    const requiredWithdrawal = Math.max(0, spendingTarget - statePensionIncome);
-
-    if (statePension1 > 0) {
-      events.push("STATE_PENSION_1_ACTIVE");
-    }
-
-    if (statePension2 > 0) {
-      events.push("STATE_PENSION_2_ACTIVE");
-    }
-
-    const actualWithdrawal = Math.min(requiredWithdrawal, portfolio);
-    portfolio -= actualWithdrawal;
-
-    let fullSpendingMet = true;
-
-    if (requiredWithdrawal > actualWithdrawal) {
-      fullSpendingMet = false;
-      events.push("PARTIAL_SPENDING_ONLY");
-    }
-
-    const annualReturn = portfolio > 0 ? getAnnualReturn(scenario, rng) : 0;
-    portfolio *= 1 + annualReturn;
-
-    if (portfolio <= 0) {
-      portfolio = 0;
-
-      if (depletionYear === null) {
-        depletionYear = year + 1;
-        events.push("PORTFOLIO_DEPLETED");
-      }
-
-      depleted = true;
-    }
-
-    const record = {
-      year: year + 1,
+    records.push({
+      year,
       age1,
       age2,
       startPortfolio,
-      spendingTarget,
+      spendingTarget: annualSpending,
       statePensionIncome,
-      withdrawal: actualWithdrawal,
-      totalIncome: actualWithdrawal + statePensionIncome,
-      fullSpendingMet,
-      returnPct: annualReturn,
-      endPortfolio: portfolio,
-      events
-    };
+      withdrawal,
+      returnPct: portfolioReturn,
+      endPortfolio,
+      inflationRate,
+      inflationFactor,
+      startPortfolioReal: realValue(startPortfolio, inflationFactor),
+      spendingTargetReal: realValue(annualSpending, inflationFactor),
+      statePensionIncomeReal: realValue(statePensionIncome, inflationFactor),
+      withdrawalReal: realValue(withdrawal, inflationFactor),
+      endPortfolioReal: realValue(endPortfolio, inflationFactor),
+      events,
+    });
 
-    records.push(addRealFieldsToRecord(record, scenario.inflation));
-
-    previousReturn = annualReturn;
+    portfolioPath.push(endPortfolio);
+    failureProbabilityPath.push(endPortfolio === 0 ? 1 : 0);
+    portfolio = endPortfolio;
+    previousReturn = portfolioReturn;
+    inflationFactor *= 1 + inflationRate;
   }
 
   return {
     records,
-    summary: {
-      depleted,
-      depletionYear,
-      cutCount,
-      raiseCount,
-      inflationSkipCount
-    }
+    endingValue: records.at(-1)?.endPortfolio ?? 0,
+    endingValueReal: records.at(-1)?.endPortfolioReal ?? 0,
+    worstValue: Math.min(...portfolioPath, scenario.startPortfolio),
+    success: portfolio > 0,
+    failureYear,
+    cuts,
+    raises,
+    inflationSkips,
+    portfolioPath,
+    failureProbabilityPath,
   };
 }
 
 export function runMonteCarlo(scenario) {
-  validateScenario(scenario);
-
-  const endingValues = [];
-  const endingValuesReal = [];
-  const yearlyEndingValues = Array.from({ length: scenario.years }, () => []);
-  const yearlyEndingValuesReal = Array.from({ length: scenario.years }, () => []);
-
-  let successes = 0;
-  let totalCuts = 0;
-  let totalRaises = 0;
-  let totalInflationSkips = 0;
-  let earliestDepletionYear = null;
-  const failedDepletionYears = [];
+  const runs = [];
+  const portfolioPaths = [];
+  const failureFlagsByYear = Array.from({ length: scenario.years }, () => []);
+  const rng = mulberry32(Number(scenario.seed) || 12345);
 
   for (let i = 0; i < scenario.monteCarloRuns; i += 1) {
-    const scenarioForRun = {
-      ...scenario,
-      seed: scenario.seed + i
-    };
+    const stockReturns = [];
+    const bondReturns = [];
 
-    const result = runSingleSimulation(scenarioForRun);
-    const { records, summary } = result;
-    const finalYear = records[records.length - 1];
-
-    const succeeded = !summary.depleted;
-
-    if (succeeded) {
-      successes += 1;
+    for (let year = 0; year < scenario.years; year += 1) {
+      stockReturns.push(scenario.assumptions.stockReturn + scenario.assumptions.stockVol * normalFromUniform(rng));
+      bondReturns.push(scenario.assumptions.bondReturn + scenario.assumptions.bondVol * normalFromUniform(rng));
     }
 
-    totalCuts += summary.cutCount;
-    totalRaises += summary.raiseCount;
-    totalInflationSkips += summary.inflationSkipCount;
+    const result = runSingleSimulation(scenario, { stockReturns, bondReturns });
+    runs.push(result);
+    portfolioPaths.push(result.portfolioPath);
 
-    if (summary.depletionYear !== null) {
-      failedDepletionYears.push(summary.depletionYear);
-
-      if (
-        earliestDepletionYear === null ||
-        summary.depletionYear < earliestDepletionYear
-      ) {
-        earliestDepletionYear = summary.depletionYear;
-      }
-    }
-
-    endingValues.push(finalYear.endPortfolio);
-    endingValuesReal.push(finalYear.endPortfolioReal);
-
-    for (let year = 0; year < records.length; year += 1) {
-      yearlyEndingValues[year].push(records[year].endPortfolio);
-      yearlyEndingValuesReal[year].push(records[year].endPortfolioReal);
+    for (let year = 0; year < scenario.years; year += 1) {
+      const hasFailedByYear = result.failureYear !== null && result.failureYear <= year + 1 ? 1 : 0;
+      failureFlagsByYear[year].push(hasFailedByYear);
     }
   }
 
-  const sortedEndingValues = [...endingValues].sort((a, b) => a - b);
-  const sortedEndingValuesReal = [...endingValuesReal].sort((a, b) => a - b);
-
-  const yearlyPercentiles = yearlyEndingValues.map((values, index) => {
-    const sorted = [...values].sort((a, b) => a - b);
-
-    return {
-      year: index + 1,
-      p10: getPercentile(sorted, 0.1),
-      median: getPercentile(sorted, 0.5),
-      p90: getPercentile(sorted, 0.9)
-    };
-  });
-
-  const yearlyPercentilesReal = yearlyEndingValuesReal.map((values, index) => {
-    const sorted = [...values].sort((a, b) => a - b);
-
-    return {
-      year: index + 1,
-      p10: getPercentile(sorted, 0.1),
-      median: getPercentile(sorted, 0.5),
-      p90: getPercentile(sorted, 0.9)
-    };
-  });
-
-  const sortedFailureYears = [...failedDepletionYears].sort((a, b) => a - b);
-  const medianFailureYear =
-    sortedFailureYears.length > 0
-      ? getPercentile(sortedFailureYears, 0.5)
-      : null;
+  const endingValues = runs.map((run) => run.endingValue).sort((a, b) => a - b);
+  const endingValuesReal = runs.map((run) => run.endingValueReal).sort((a, b) => a - b);
+  const failureYears = runs.map((run) => run.failureYear).filter((value) => value !== null).sort((a, b) => a - b);
+  const successCount = runs.filter((run) => run.success).length;
 
   return {
     runs: scenario.monteCarloRuns,
-    successRate: successes / scenario.monteCarloRuns,
-    medianEndingValue: getPercentile(sortedEndingValues, 0.5),
-    medianEndingValueReal: getPercentile(sortedEndingValuesReal, 0.5),
-    p10EndingValue: getPercentile(sortedEndingValues, 0.1),
-    p10EndingValueReal: getPercentile(sortedEndingValuesReal, 0.1),
-    p90EndingValue: getPercentile(sortedEndingValues, 0.9),
-    p90EndingValueReal: getPercentile(sortedEndingValuesReal, 0.9),
-    worstEndingValue: sortedEndingValues[0],
-    worstEndingValueReal: sortedEndingValuesReal[0],
-    yearlyPercentiles,
-    yearlyPercentilesReal,
+    successRate: successCount / scenario.monteCarloRuns,
+    medianEndingValue: quantile(endingValues, 0.5),
+    medianEndingValueReal: quantile(endingValuesReal, 0.5),
+    p10EndingValue: quantile(endingValues, 0.1),
+    p10EndingValueReal: quantile(endingValuesReal, 0.1),
+    p90EndingValue: quantile(endingValues, 0.9),
+    p90EndingValueReal: quantile(endingValuesReal, 0.9),
+    worstEndingValue: endingValues[0] ?? 0,
+    worstEndingValueReal: endingValuesReal[0] ?? 0,
+    percentilePaths: {
+      p10: percentileByYear(portfolioPaths, 0.1),
+      p50: percentileByYear(portfolioPaths, 0.5),
+      p90: percentileByYear(portfolioPaths, 0.9),
+    },
     downside: {
-      averageCutsPerRun: totalCuts / scenario.monteCarloRuns,
-      averageRaisesPerRun: totalRaises / scenario.monteCarloRuns,
-      averageInflationSkipsPerRun: totalInflationSkips / scenario.monteCarloRuns,
-      earliestDepletionYear,
-      medianFailureYear
-    }
+      averageCutsPerRun: runs.reduce((sum, run) => sum + run.cuts, 0) / scenario.monteCarloRuns,
+      averageRaisesPerRun: runs.reduce((sum, run) => sum + run.raises, 0) / scenario.monteCarloRuns,
+      averageInflationSkipsPerRun: runs.reduce((sum, run) => sum + run.inflationSkips, 0) / scenario.monteCarloRuns,
+      earliestDepletionYear: failureYears.length ? failureYears[0] : null,
+      medianFailureYear: failureYears.length ? quantile(failureYears, 0.5) : null,
+    },
+    failureProbabilityByYear: failureFlagsByYear.map((yearFlags) => yearFlags.reduce((a, b) => a + b, 0) / yearFlags.length),
+    representativeRun: runs[Math.floor(runs.length / 2)],
   };
+}
+
+export function runStressTests(scenario) {
+  return stressTestLibrary.map((test) => {
+    const result = runSingleSimulation(scenario, test);
+    return {
+      ...test,
+      ...result,
+    };
+  });
 }

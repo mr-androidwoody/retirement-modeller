@@ -1,529 +1,445 @@
 import { defaultScenario } from "./scenarios.js";
-import { runSingleSimulation, runMonteCarlo } from "./simulator.js";
+import { buildScenarioFromInputs, runMonteCarlo, runSingleSimulation, runStressTests } from "./simulator.js";
+
+const state = {
+  charts: {},
+  currentScenario: null,
+};
+
+const els = {};
+
+function byId(id) {
+  return document.getElementById(id);
+}
 
 function formatCurrency(value) {
   return `£${Math.round(value).toLocaleString("en-GB")}`;
 }
 
-function formatNumberWithCommas(value) {
-  if (value === "" || value === null || value === undefined) return "";
-  const num = Number(String(value).replace(/,/g, ""));
-  if (Number.isNaN(num)) return "";
-  return num.toLocaleString("en-GB");
+function formatNumber(value) {
+  return Math.round(value).toLocaleString("en-GB");
 }
 
-function removeCommas(value) {
-  if (!value) return value;
-  return String(value).replace(/,/g, "");
-}
-
-function formatPercent(value, decimals = 1) {
+function formatPercentFromRatio(value, decimals = 1) {
   return `${(value * 100).toFixed(decimals)}%`;
 }
 
-function valueLabel(isReal) {
-  return isReal ? "Real (today’s money)" : "Nominal";
+function formatPlainPercent(value, decimals = 1) {
+  return `${Number(value).toFixed(decimals)}%`;
 }
 
-function pickValue(isReal, nominal, real) {
+function removeCommas(value) {
+  return String(value).replace(/,/g, "");
+}
+
+function formatInputInteger(el, value) {
+  el.value = Number(value).toLocaleString("en-GB");
+}
+
+function formatDisplayValue(isReal, nominal, real) {
   return isReal ? real : nominal;
 }
 
-function renderSummary(monteCarlo, isReal) {
-  const summaryEl = document.getElementById("summary");
-  if (!summaryEl) return;
-
-  summaryEl.innerHTML = `
-    <div class="card">
-      <div class="card-title">Value mode</div>
-      <div class="card-value">${valueLabel(isReal)}</div>
-    </div>
-    <div class="card">
-      <div class="card-title">Monte Carlo runs</div>
-      <div class="card-value">${formatNumberWithCommas(monteCarlo.runs)}</div>
-    </div>
-    <div class="card">
-      <div class="card-title">Success rate</div>
-      <div class="card-value">${formatPercent(monteCarlo.successRate)}</div>
-    </div>
-    <div class="card">
-      <div class="card-title">Median ending value</div>
-      <div class="card-value">${formatCurrency(
-        pickValue(isReal, monteCarlo.medianEndingValue, monteCarlo.medianEndingValueReal)
-      )}</div>
-    </div>
-    <div class="card">
-      <div class="card-title">P10 ending value</div>
-      <div class="card-value">${formatCurrency(
-        pickValue(isReal, monteCarlo.p10EndingValue, monteCarlo.p10EndingValueReal)
-      )}</div>
-    </div>
-    <div class="card">
-      <div class="card-title">P90 ending value</div>
-      <div class="card-value">${formatCurrency(
-        pickValue(isReal, monteCarlo.p90EndingValue, monteCarlo.p90EndingValueReal)
-      )}</div>
-    </div>
-  `;
+function getFormInputs() {
+  return {
+    startPortfolio: Number(removeCommas(els.startPortfolio.value)),
+    annualSpending: Number(removeCommas(els.annualSpending.value)),
+    years: Number(els.years.value),
+    inflation: Number(els.inflation.value),
+    stockAllocation: Number(els.stockAllocation.value),
+    bondAllocation: 100 - Number(els.stockAllocation.value),
+    stockReturn: Number(els.stockReturn.value),
+    stockVol: Number(els.stockVol.value),
+    bondReturn: Number(els.bondReturn.value),
+    bondVol: Number(els.bondVol.value),
+    person1Age: Number(els.person1Age.value),
+    person2Age: Number(els.person2Age.value),
+    person1StatePensionAge: Number(els.person1StatePensionAge.value),
+    person2StatePensionAge: Number(els.person2StatePensionAge.value),
+    statePensionToday: Number(removeCommas(els.statePensionToday.value)),
+    monteCarloRuns: Number(removeCommas(els.monteCarloRuns.value)),
+    seed: Number(els.seed.value),
+    upperGuardrail: Number(els.upperGuardrail.value),
+    lowerGuardrail: Number(els.lowerGuardrail.value),
+    cutPct: Number(els.cutPct.value),
+    raisePct: Number(els.raisePct.value),
+    skipInflationAfterNegativeReturn: els.skipInflationAfterNegativeReturn.checked,
+  };
 }
 
-function renderStressSummary(monteCarlo, isReal) {
-  const stressEl = document.getElementById("stressSummary");
-  if (!stressEl) return;
+function validateInputs(inputs) {
+  if (inputs.startPortfolio <= 0) return "Starting portfolio must be above zero.";
+  if (inputs.annualSpending <= 0) return "Annual spending must be above zero.";
+  if (inputs.stockAllocation < 0 || inputs.stockAllocation > 100) return "Equity allocation must be between 0 and 100.";
+  if (inputs.monteCarloRuns < 100) return "Monte Carlo runs should be at least 100.";
+  if (inputs.years < 1) return "Simulation years must be at least 1.";
+  if (inputs.lowerGuardrail <= 0 || inputs.upperGuardrail <= 0) return "Guardrails must be above zero.";
+  if (inputs.lowerGuardrail >= inputs.upperGuardrail) return "Lower guardrail must be below upper guardrail.";
+  return null;
+}
 
-  const earliestDepletion =
-    monteCarlo.downside.earliestDepletionYear === null
-      ? "No failures"
-      : `Year ${monteCarlo.downside.earliestDepletionYear}`;
+function showError(message) {
+  els.errorBox.style.display = message ? "block" : "none";
+  els.errorBox.textContent = message || "";
+}
 
-  const medianFailureYear =
-    monteCarlo.downside.medianFailureYear === null
-      ? "No failures"
-      : `Year ${Math.round(monteCarlo.downside.medianFailureYear)}`;
+function populateDefaults() {
+  formatInputInteger(els.startPortfolio, defaultScenario.startPortfolio);
+  formatInputInteger(els.annualSpending, defaultScenario.annualSpending);
+  els.annualSpendingSlider.value = defaultScenario.annualSpending;
+  els.years.value = defaultScenario.years;
+  els.inflation.value = (defaultScenario.inflation * 100).toFixed(1);
+  els.stockAllocation.value = defaultScenario.stockAllocation * 100;
+  els.stockAllocationSlider.value = defaultScenario.stockAllocation * 100;
+  els.bondAllocation.value = defaultScenario.bondAllocation * 100;
+  els.stockReturn.value = (defaultScenario.assumptions.stockReturn * 100).toFixed(1);
+  els.stockVol.value = (defaultScenario.assumptions.stockVol * 100).toFixed(1);
+  els.bondReturn.value = (defaultScenario.assumptions.bondReturn * 100).toFixed(1);
+  els.bondVol.value = (defaultScenario.assumptions.bondVol * 100).toFixed(1);
+  els.person1Age.value = defaultScenario.person1Age;
+  els.person2Age.value = defaultScenario.person2Age;
+  els.person1StatePensionAge.value = defaultScenario.person1StatePensionAge;
+  els.person2StatePensionAge.value = defaultScenario.person2StatePensionAge;
+  formatInputInteger(els.statePensionToday, defaultScenario.statePensionToday);
+  formatInputInteger(els.monteCarloRuns, defaultScenario.monteCarloRuns);
+  els.seed.value = defaultScenario.seed;
+  els.upperGuardrail.value = defaultScenario.rules.upperGuardrail.toFixed(2);
+  els.lowerGuardrail.value = defaultScenario.rules.lowerGuardrail.toFixed(2);
+  els.cutPct.value = defaultScenario.rules.cutPct * 100;
+  els.raisePct.value = defaultScenario.rules.raisePct * 100;
+  els.skipInflationAfterNegativeReturn.checked = defaultScenario.rules.skipInflationAfterNegativeReturn;
+  els.showRealValues.checked = false;
+  els.showFullTimeline.checked = false;
+}
 
-  stressEl.innerHTML = `
-    <div class="card">
-      <div class="card-title">Worst ending value</div>
-      <div class="card-value">${formatCurrency(
-        pickValue(isReal, monteCarlo.worstEndingValue, monteCarlo.worstEndingValueReal)
-      )}</div>
-    </div>
-    <div class="card">
-      <div class="card-title">Average GK cuts per run</div>
-      <div class="card-value">${monteCarlo.downside.averageCutsPerRun.toFixed(2)}</div>
-    </div>
-    <div class="card">
-      <div class="card-title">Average GK raises per run</div>
-      <div class="card-value">${monteCarlo.downside.averageRaisesPerRun.toFixed(2)}</div>
-    </div>
-    <div class="card">
-      <div class="card-title">Average inflation skips per run</div>
-      <div class="card-value">${monteCarlo.downside.averageInflationSkipsPerRun.toFixed(2)}</div>
-    </div>
-    <div class="card">
-      <div class="card-title">Earliest depletion year</div>
-      <div class="card-value">${earliestDepletion}</div>
-    </div>
-    <div class="card">
-      <div class="card-title">Median failure year</div>
-      <div class="card-value">${medianFailureYear}</div>
+function bindElements() {
+  [
+    "startPortfolio", "annualSpending", "annualSpendingSlider", "years", "inflation", "stockAllocation",
+    "stockAllocationSlider", "bondAllocation", "stockReturn", "stockVol", "bondReturn", "bondVol",
+    "person1Age", "person2Age", "person1StatePensionAge", "person2StatePensionAge",
+    "statePensionToday", "monteCarloRuns", "seed", "upperGuardrail", "lowerGuardrail",
+    "cutPct", "raisePct", "skipInflationAfterNegativeReturn", "runBtn", "resetBtn",
+    "showRealValues", "showFullTimeline", "summary", "stressSummary", "stressTable", "results-table",
+    "errorBox", "heroPill"
+  ].forEach((id) => {
+    els[id.replace(/-([a-z])/g, (_, c) => c.toUpperCase())] = byId(id);
+  });
+
+  els.cashflowChart = byId("cashflowChart");
+  els.portfolioChart = byId("portfolioChart");
+  els.failureChart = byId("failureChart");
+  els.stressChart = byId("stressChart");
+}
+
+function attachInputFormatting() {
+  [els.startPortfolio, els.annualSpending, els.statePensionToday, els.monteCarloRuns].forEach((input) => {
+    input.addEventListener("blur", () => {
+      const n = Number(removeCommas(input.value));
+      if (!Number.isNaN(n) && n !== 0) input.value = n.toLocaleString("en-GB");
+    });
+  });
+
+  els.stockAllocationSlider.addEventListener("input", () => {
+    els.stockAllocation.value = els.stockAllocationSlider.value;
+    els.bondAllocation.value = 100 - Number(els.stockAllocation.value);
+  });
+
+  els.stockAllocation.addEventListener("input", () => {
+    const value = Math.max(0, Math.min(100, Number(els.stockAllocation.value) || 0));
+    els.stockAllocation.value = value;
+    els.stockAllocationSlider.value = value;
+    els.bondAllocation.value = 100 - value;
+  });
+
+  els.annualSpendingSlider.addEventListener("input", () => {
+    formatInputInteger(els.annualSpending, Number(els.annualSpendingSlider.value));
+  });
+}
+
+function renderMetricCards(cards, targetEl) {
+  targetEl.innerHTML = cards.map((card) => `
+    <article class="metric-card ${card.tone || ""}">
+      <div class="metric-label">${card.label}</div>
+      <div class="metric-value">${card.value}</div>
+      ${card.sub ? `<div class="metric-sub">${card.sub}</div>` : ""}
+    </article>
+  `).join("");
+}
+
+function renderSummary(monteCarlo, isReal) {
+  renderMetricCards([
+    {
+      label: "Success rate",
+      value: formatPercentFromRatio(monteCarlo.successRate),
+      sub: "Runs that did not deplete within the selected horizon",
+      tone: monteCarlo.successRate >= 0.8 ? "metric-good" : "metric-bad",
+    },
+    {
+      label: "Median ending value",
+      value: formatCurrency(formatDisplayValue(isReal, monteCarlo.medianEndingValue, monteCarlo.medianEndingValueReal)),
+      sub: isReal ? "Median outcome in today’s money" : "Median nominal outcome",
+    },
+    {
+      label: "P10 ending value",
+      value: formatCurrency(formatDisplayValue(isReal, monteCarlo.p10EndingValue, monteCarlo.p10EndingValueReal)),
+      sub: "Downside decile outcome",
+    },
+    {
+      label: "P90 ending value",
+      value: formatCurrency(formatDisplayValue(isReal, monteCarlo.p90EndingValue, monteCarlo.p90EndingValueReal)),
+      sub: "Upside decile outcome",
+    },
+    {
+      label: "Worst ending value",
+      value: formatCurrency(formatDisplayValue(isReal, monteCarlo.worstEndingValue, monteCarlo.worstEndingValueReal)),
+      sub: "Worst simulated path ending value",
+      tone: "metric-bad",
+    },
+    {
+      label: "Monte Carlo runs",
+      value: formatNumber(monteCarlo.runs),
+      sub: "Seeded for repeatable test results",
+    },
+  ], els.summary);
+}
+
+function renderStressSummary(monteCarlo) {
+  renderMetricCards([
+    {
+      label: "Average GK cuts",
+      value: monteCarlo.downside.averageCutsPerRun.toFixed(2),
+      sub: "Per Monte Carlo run",
+    },
+    {
+      label: "Average GK raises",
+      value: monteCarlo.downside.averageRaisesPerRun.toFixed(2),
+      sub: "Per Monte Carlo run",
+    },
+    {
+      label: "Inflation skips",
+      value: monteCarlo.downside.averageInflationSkipsPerRun.toFixed(2),
+      sub: "Average skipped upratings per run",
+    },
+    {
+      label: "Earliest depletion",
+      value: monteCarlo.downside.earliestDepletionYear ? `Year ${monteCarlo.downside.earliestDepletionYear}` : "None",
+      sub: monteCarlo.downside.medianFailureYear ? `Median failure year ${Math.round(monteCarlo.downside.medianFailureYear)}` : "No failed runs",
+      tone: monteCarlo.downside.earliestDepletionYear ? "metric-bad" : "metric-good",
+    },
+  ], els.stressSummary);
+}
+
+function destroyChart(name) {
+  if (state.charts[name]) state.charts[name].destroy();
+}
+
+function lineChart(ctx, config) {
+  return new Chart(ctx, {
+    type: "line",
+    data: config.data,
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { position: "bottom", labels: { usePointStyle: true, boxWidth: 10 } },
+        tooltip: {
+          callbacks: {
+            label(item) {
+              const y = item.raw;
+              if (typeof y === "number") {
+                if (config.percent) return `${item.dataset.label}: ${y.toFixed(1)}%`;
+                return `${item.dataset.label}: ${formatCurrency(y)}`;
+              }
+              return item.dataset.label;
+            },
+          },
+        },
+      },
+      scales: {
+        y: {
+          ticks: {
+            callback(value) {
+              return config.percent ? `${value}%` : formatCurrency(value);
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
+function renderCashflowChart(records, isReal) {
+  destroyChart("cashflow");
+  state.charts.cashflow = lineChart(els.cashflowChart, {
+    data: {
+      labels: records.map((row) => `Year ${row.year}`),
+      datasets: [
+        { label: "Household spending", data: records.map((r) => formatDisplayValue(isReal, r.spendingTarget, r.spendingTargetReal)), borderWidth: 3 },
+        { label: "State pension income", data: records.map((r) => formatDisplayValue(isReal, r.statePensionIncome, r.statePensionIncomeReal)), borderWidth: 3 },
+        { label: "Portfolio withdrawals", data: records.map((r) => formatDisplayValue(isReal, r.withdrawal, r.withdrawalReal)), borderWidth: 3 },
+      ],
+    },
+  });
+}
+
+function renderPortfolioChart(monteCarlo, isReal) {
+  destroyChart("portfolio");
+  const convert = (arr) => arr.map((value, idx) => {
+    if (!isReal) return value;
+    const inflationFactor = (1 + state.currentScenario.inflation) ** (idx + 1);
+    return value / inflationFactor;
+  });
+  state.charts.portfolio = lineChart(els.portfolioChart, {
+    data: {
+      labels: monteCarlo.percentilePaths.p50.map((_, idx) => `Year ${idx + 1}`),
+      datasets: [
+        { label: "P10 path", data: convert(monteCarlo.percentilePaths.p10), borderWidth: 2 },
+        { label: "Median path", data: convert(monteCarlo.percentilePaths.p50), borderWidth: 3 },
+        { label: "P90 path", data: convert(monteCarlo.percentilePaths.p90), borderWidth: 2 },
+      ],
+    },
+  });
+}
+
+function renderFailureChart(monteCarlo) {
+  destroyChart("failure");
+  state.charts.failure = lineChart(els.failureChart, {
+    percent: true,
+    data: {
+      labels: monteCarlo.failureProbabilityByYear.map((_, idx) => `Year ${idx + 1}`),
+      datasets: [{ label: "Probability of depletion", data: monteCarlo.failureProbabilityByYear.map((v) => v * 100), borderWidth: 3 }],
+    },
+  });
+}
+
+function renderStressChart(stressResults, isReal) {
+  destroyChart("stress");
+  state.charts.stress = lineChart(els.stressChart, {
+    data: {
+      labels: stressResults[0].portfolioPath.map((_, idx) => `Year ${idx + 1}`),
+      datasets: stressResults.map((result) => ({
+        label: result.name,
+        data: result.records.map((row) => formatDisplayValue(isReal, row.endPortfolio, row.endPortfolioReal)),
+        borderWidth: result.key === "early-crash" ? 3 : 2,
+      })),
+    },
+  });
+}
+
+function renderStressTable(stressResults, isReal) {
+  els.stressTable.innerHTML = `
+    <div class="stress-table">
+      <table>
+        <thead>
+          <tr>
+            <th>Scenario</th>
+            <th>Description</th>
+            <th>Ending value</th>
+            <th>Worst point</th>
+            <th>Failure year</th>
+            <th>GK cuts</th>
+            <th>GK raises</th>
+            <th>Inflation skips</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${stressResults.map((result) => `
+            <tr>
+              <td><span class="stress-badge">${result.name}</span></td>
+              <td>${result.description}</td>
+              <td>${formatCurrency(formatDisplayValue(isReal, result.endingValue, result.endingValueReal))}</td>
+              <td>${formatCurrency(isReal ? Math.min(...result.records.map((r) => r.endPortfolioReal)) : result.worstValue)}</td>
+              <td>${result.failureYear ? `Year ${result.failureYear}` : "Survived"}</td>
+              <td>${result.cuts}</td>
+              <td>${result.raises}</td>
+              <td>${result.inflationSkips}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
     </div>
   `;
 }
 
 function renderTable(records, showFullTimeline, isReal) {
-  const tableEl = document.getElementById("results-table");
-  if (!tableEl) return;
+  const rows = (showFullTimeline ? records : records.slice(0, 12)).map((row) => `
+    <tr>
+      <td>${row.year}</td>
+      <td>${row.age1}</td>
+      <td>${row.age2}</td>
+      <td>${formatCurrency(formatDisplayValue(isReal, row.startPortfolio, row.startPortfolioReal))}</td>
+      <td>${formatCurrency(formatDisplayValue(isReal, row.spendingTarget, row.spendingTargetReal))}</td>
+      <td>${formatCurrency(formatDisplayValue(isReal, row.statePensionIncome, row.statePensionIncomeReal))}</td>
+      <td>${formatCurrency(formatDisplayValue(isReal, row.withdrawal, row.withdrawalReal))}</td>
+      <td>${formatPercentFromRatio(row.returnPct)}</td>
+      <td>${formatCurrency(formatDisplayValue(isReal, row.endPortfolio, row.endPortfolioReal))}</td>
+      <td>${formatPlainPercent(row.inflationRate * 100)}</td>
+      <td>${row.events.join(", ") || "—"}</td>
+    </tr>
+  `).join("");
 
-  const rowsToShow = showFullTimeline ? records : records.slice(0, 10);
-
-  const rows = rowsToShow
-    .map((row) => {
-      const startPortfolio = isReal ? row.startPortfolioReal : row.startPortfolio;
-      const spendingTarget = isReal ? row.spendingTargetReal : row.spendingTarget;
-      const statePensionIncome = isReal ? row.statePensionIncomeReal : row.statePensionIncome;
-      const withdrawal = isReal ? row.withdrawalReal : row.withdrawal;
-      const endPortfolio = isReal ? row.endPortfolioReal : row.endPortfolio;
-
-      return `
-        <tr>
-          <td>${row.year}</td>
-          <td>${row.age1}</td>
-          <td>${row.age2}</td>
-          <td>${formatCurrency(startPortfolio)}</td>
-          <td>${formatCurrency(spendingTarget)}</td>
-          <td>${formatCurrency(statePensionIncome)}</td>
-          <td>${formatCurrency(withdrawal)}</td>
-          <td>${formatPercent(row.returnPct)}</td>
-          <td>${formatCurrency(endPortfolio)}</td>
-          <td>${row.events.join(", ")}</td>
-        </tr>
-      `;
-    })
-    .join("");
-
-  tableEl.innerHTML = `
-    <table>
-      <thead>
-        <tr>
-          <th>Year</th>
-          <th>Age 1</th>
-          <th>Age 2</th>
-          <th>Start Portfolio</th>
-          <th>Spending Target</th>
-          <th>State Pension</th>
-          <th>Withdrawal</th>
-          <th>Return</th>
-          <th>End Portfolio</th>
-          <th>Events</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
+  els.resultsTable.innerHTML = `
+    <thead>
+      <tr>
+        <th>Year</th>
+        <th>Age 1</th>
+        <th>Age 2</th>
+        <th>Start portfolio</th>
+        <th>Spending target</th>
+        <th>State pension</th>
+        <th>Withdrawal</th>
+        <th>Return</th>
+        <th>End portfolio</th>
+        <th>Inflation</th>
+        <th>Events</th>
+      </tr>
+    </thead>
+    <tbody>${rows}</tbody>
   `;
 }
 
-let cashflowChartInstance = null;
-let portfolioChartInstance = null;
+function run() {
+  const inputs = getFormInputs();
+  const error = validateInputs(inputs);
+  showError(error);
+  if (error) return;
 
-function buildChart(canvasId, config) {
-  const canvas = document.getElementById(canvasId);
-  if (!canvas) return null;
-
-  canvas.height = 360;
-  return new Chart(canvas, config);
-}
-
-function renderCashflowChart(records, isReal) {
-  if (cashflowChartInstance) {
-    cashflowChartInstance.destroy();
-  }
-
-  cashflowChartInstance = buildChart("cashflowChart", {
-    type: "line",
-    data: {
-      labels: records.map((r) => `Year ${r.year}`),
-      datasets: [
-        {
-          label: "Total household spending",
-          data: records.map((r) => (isReal ? r.spendingTargetReal : r.spendingTarget)),
-          borderWidth: 2
-        },
-        {
-          label: "State pension income",
-          data: records.map((r) => (isReal ? r.statePensionIncomeReal : r.statePensionIncome)),
-          borderWidth: 2
-        },
-        {
-          label: "Portfolio withdrawals",
-          data: records.map((r) => (isReal ? r.withdrawalReal : r.withdrawal)),
-          borderWidth: 2
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          position: "top"
-        }
-      },
-      scales: {
-        y: {
-          beginAtZero: true
-        }
-      }
-    }
+  const scenario = buildScenarioFromInputs(inputs);
+  state.currentScenario = scenario;
+  const monteCarlo = runMonteCarlo(scenario);
+  const medianRun = runSingleSimulation(scenario, {
+    stockReturns: Array.from({ length: scenario.years }, () => scenario.assumptions.stockReturn),
+    bondReturns: Array.from({ length: scenario.years }, () => scenario.assumptions.bondReturn),
   });
+  const stressResults = runStressTests(scenario);
+  const isReal = els.showRealValues.checked;
+
+  els.heroPill.textContent = isReal ? "Real values" : "Nominal values";
+  renderSummary(monteCarlo, isReal);
+  renderStressSummary(monteCarlo);
+  renderCashflowChart(medianRun.records, isReal);
+  renderPortfolioChart(monteCarlo, isReal);
+  renderFailureChart(monteCarlo);
+  renderStressChart(stressResults, isReal);
+  renderStressTable(stressResults, isReal);
+  renderTable(medianRun.records, els.showFullTimeline.checked, isReal);
 }
 
-function renderPortfolioChart(monteCarlo, isReal) {
-  if (portfolioChartInstance) {
-    portfolioChartInstance.destroy();
-  }
+function initialise() {
+  bindElements();
+  populateDefaults();
+  attachInputFormatting();
 
-  const series = isReal ? monteCarlo.yearlyPercentilesReal : monteCarlo.yearlyPercentiles;
-
-  portfolioChartInstance = buildChart("portfolioChart", {
-    type: "line",
-    data: {
-      labels: series.map((r) => `Year ${r.year}`),
-      datasets: [
-        {
-          label: "P10 portfolio",
-          data: series.map((r) => r.p10),
-          borderWidth: 2
-        },
-        {
-          label: "Median portfolio",
-          data: series.map((r) => r.median),
-          borderWidth: 2
-        },
-        {
-          label: "P90 portfolio",
-          data: series.map((r) => r.p90),
-          borderWidth: 2
-        }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          position: "top"
-        }
-      },
-      scales: {
-        y: {
-          beginAtZero: true
-        }
-      }
-    }
+  els.runBtn.addEventListener("click", run);
+  els.resetBtn.addEventListener("click", () => {
+    populateDefaults();
+    run();
   });
+  els.showRealValues.addEventListener("change", run);
+  els.showFullTimeline.addEventListener("change", run);
+
+  run();
 }
 
-function setInputValue(id, value) {
-  const el = document.getElementById(id);
-  if (el) el.value = value;
-}
-
-function populateInputs(scenario) {
-  const stockPct = scenario.stockAllocation * 100;
-  const bondPct = scenario.bondAllocation * 100;
-
-  setInputValue("startPortfolio", formatNumberWithCommas(scenario.startPortfolio));
-  setInputValue("annualSpending", formatNumberWithCommas(scenario.annualSpending));
-  setInputValue("annualSpendingSlider", scenario.annualSpending);
-  setInputValue("stockAllocation", stockPct);
-  setInputValue("stockAllocationSlider", stockPct);
-  setInputValue("bondAllocation", bondPct);
-  setInputValue("years", scenario.years);
-  setInputValue("monteCarloRuns", formatNumberWithCommas(scenario.monteCarloRuns));
-  setInputValue("seed", scenario.seed);
-  setInputValue("inflation", scenario.inflation * 100);
-  setInputValue("person1Age", scenario.person1Age);
-  setInputValue("person2Age", scenario.person2Age);
-  setInputValue("person1StatePensionAge", scenario.person1StatePensionAge);
-  setInputValue("person2StatePensionAge", scenario.person2StatePensionAge);
-  setInputValue("statePensionToday", formatNumberWithCommas(scenario.statePensionToday));
-}
-
-function getNumberValue(id) {
-  const raw = document.getElementById(id).value;
-  return Number(removeCommas(raw));
-}
-
-function updateBondAllocationFromStock() {
-  const stockEl = document.getElementById("stockAllocation");
-  const bondEl = document.getElementById("bondAllocation");
-  if (!stockEl || !bondEl) return;
-
-  const stock = Number(removeCommas(stockEl.value));
-  const bond = 100 - stock;
-  bondEl.value = Number.isFinite(bond) ? bond : 0;
-}
-
-function readScenarioFromInputs() {
-  return {
-    ...defaultScenario,
-    startPortfolio: getNumberValue("startPortfolio"),
-    annualSpending: getNumberValue("annualSpending"),
-    stockAllocation: getNumberValue("stockAllocation") / 100,
-    bondAllocation: getNumberValue("bondAllocation") / 100,
-    years: getNumberValue("years"),
-    monteCarloRuns: getNumberValue("monteCarloRuns"),
-    seed: getNumberValue("seed"),
-    inflation: getNumberValue("inflation") / 100,
-    person1Age: getNumberValue("person1Age"),
-    person2Age: getNumberValue("person2Age"),
-    person1StatePensionAge: getNumberValue("person1StatePensionAge"),
-    person2StatePensionAge: getNumberValue("person2StatePensionAge"),
-    statePensionToday: getNumberValue("statePensionToday")
-  };
-}
-
-function showError(message) {
-  const errorBox = document.getElementById("errorBox");
-  if (!errorBox) return;
-  errorBox.style.display = "block";
-  errorBox.textContent = message;
-}
-
-function hideError() {
-  const errorBox = document.getElementById("errorBox");
-  if (!errorBox) return;
-  errorBox.style.display = "none";
-  errorBox.textContent = "";
-}
-
-function validateInputScenario(scenario) {
-  if (Math.abs(scenario.stockAllocation + scenario.bondAllocation - 1) > 0.000001) {
-    throw new Error("Equity and bond allocations must add up to 100%.");
-  }
-
-  if (scenario.startPortfolio <= 0) {
-    throw new Error("Starting portfolio must be greater than 0.");
-  }
-
-  if (scenario.annualSpending < 0) {
-    throw new Error("Annual spending cannot be negative.");
-  }
-
-  if (scenario.years <= 0) {
-    throw new Error("Simulation years must be greater than 0.");
-  }
-
-  if (scenario.monteCarloRuns <= 0) {
-    throw new Error("Monte Carlo runs must be greater than 0.");
-  }
-
-  if (scenario.person1StatePensionAge < scenario.person1Age) {
-    throw new Error("Person 1 state pension age cannot be below current age.");
-  }
-
-  if (scenario.person2StatePensionAge < scenario.person2Age) {
-    throw new Error("Person 2 state pension age cannot be below current age.");
-  }
-}
-
-function enableCommaFormatting(id) {
-  const input = document.getElementById(id);
-  if (!input) return;
-
-  input.addEventListener("input", () => {
-    const digitsOnly = removeCommas(input.value);
-
-    if (digitsOnly === "") {
-      input.value = "";
-      return;
-    }
-
-    if (!/^\d*\.?\d*$/.test(digitsOnly)) {
-      return;
-    }
-
-    const parts = digitsOnly.split(".");
-    const integerPart = parts[0];
-    const decimalPart = parts[1];
-
-    const formattedInteger =
-      integerPart === "" ? "" : Number(integerPart).toLocaleString("en-GB");
-
-    input.value =
-      decimalPart !== undefined
-        ? `${formattedInteger}.${decimalPart}`
-        : formattedInteger;
-  });
-
-  input.addEventListener("blur", () => {
-    const raw = removeCommas(input.value);
-    if (raw === "" || Number.isNaN(Number(raw))) return;
-    input.value = formatNumberWithCommas(raw);
-  });
-}
-
-function wireUpSliders() {
-  const spendingInput = document.getElementById("annualSpending");
-  const spendingSlider = document.getElementById("annualSpendingSlider");
-
-  if (spendingInput && spendingSlider) {
-    spendingSlider.addEventListener("input", () => {
-      spendingInput.value = formatNumberWithCommas(spendingSlider.value);
-    });
-
-    spendingInput.addEventListener("input", () => {
-      const raw = removeCommas(spendingInput.value);
-      spendingSlider.value = raw || 0;
-    });
-  }
-
-  const stockInput = document.getElementById("stockAllocation");
-  const stockSlider = document.getElementById("stockAllocationSlider");
-
-  if (stockInput && stockSlider) {
-    stockSlider.addEventListener("input", () => {
-      stockInput.value = stockSlider.value;
-      updateBondAllocationFromStock();
-    });
-
-    stockInput.addEventListener("input", () => {
-      stockSlider.value = removeCommas(stockInput.value) || 0;
-      updateBondAllocationFromStock();
-    });
-  }
-}
-
-window.addEventListener("DOMContentLoaded", () => {
-  let showFullTimeline = false;
-  let isReal = false;
-
-  function updateButtons() {
-    const valueModeBtn = document.getElementById("valueModeBtn");
-    const toggleTableBtn = document.getElementById("toggleTableBtn");
-    const yearlyDetailSection = document.getElementById("yearlyDetailSection");
-
-    if (valueModeBtn) {
-      valueModeBtn.textContent = isReal ? "Show nominal values" : "Show real values";
-    }
-
-    if (toggleTableBtn) {
-      toggleTableBtn.textContent = showFullTimeline
-        ? "Hide yearly detail"
-        : "Show yearly detail";
-    }
-
-    if (yearlyDetailSection) {
-      yearlyDetailSection.style.display = showFullTimeline ? "block" : "none";
-    }
-  }
-
-  function runFromInputs() {
-    try {
-      hideError();
-
-      updateBondAllocationFromStock();
-
-      const scenario = readScenarioFromInputs();
-      validateInputScenario(scenario);
-
-      const singleResult = runSingleSimulation(scenario);
-      const monteCarlo = runMonteCarlo(scenario);
-
-      renderSummary(monteCarlo, isReal);
-      renderStressSummary(monteCarlo, isReal);
-      renderCashflowChart(singleResult.records, isReal);
-      renderPortfolioChart(monteCarlo, isReal);
-
-      if (showFullTimeline) {
-        renderTable(singleResult.records, true, isReal);
-      }
-
-      updateButtons();
-    } catch (error) {
-      showError(error.message);
-    }
-  }
-
-  populateInputs(defaultScenario);
-  updateBondAllocationFromStock();
-  wireUpSliders();
-
-  enableCommaFormatting("startPortfolio");
-  enableCommaFormatting("annualSpending");
-  enableCommaFormatting("statePensionToday");
-  enableCommaFormatting("monteCarloRuns");
-
-  runFromInputs();
-
-  const runBtn = document.getElementById("runBtn");
-  if (runBtn) {
-    runBtn.addEventListener("click", runFromInputs);
-  }
-
-  const resetBtn = document.getElementById("resetBtn");
-  if (resetBtn) {
-    resetBtn.addEventListener("click", () => {
-      populateInputs(defaultScenario);
-      updateBondAllocationFromStock();
-      runFromInputs();
-    });
-  }
-
-  const toggleTableBtn = document.getElementById("toggleTableBtn");
-  if (toggleTableBtn) {
-    toggleTableBtn.addEventListener("click", () => {
-      showFullTimeline = !showFullTimeline;
-      runFromInputs();
-    });
-  }
-
-  const valueModeBtn = document.getElementById("valueModeBtn");
-  if (valueModeBtn) {
-    valueModeBtn.addEventListener("click", () => {
-      isReal = !isReal;
-      runFromInputs();
-    });
-  }
-});
+initialise();

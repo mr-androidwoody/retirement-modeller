@@ -1,11 +1,9 @@
 {
-  "name": "retirement-simulator-v2",
-  "version": "1.0.0",
+  "name": "retirement-modeller",
+  "version": "2.0.0",
+  "private": true,
   "type": "module",
   "scripts": {
-    "test": "vitest"
-  },
-  "devDependencies": {
-    "vitest": "^3.2.4"
+    "start": "npx serve ."
   }
 }
