@@ -1,11 +1,4 @@
 {
-  "name": "retirement-simulator",
-  "version": "1.1.0",
-  "type": "module",
-  "scripts": {
-    "test": "vitest"
-  },
-  "devDependencies": {
-    "vitest": "^3.2.4"
-  }
+"name":"retirement-simulator",
+"type":"module"
 }

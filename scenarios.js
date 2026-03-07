@@ -1,89 +1,12 @@
-export const defaultScenario = {
-  startPortfolio: 1_000_000,
-  years: 40,
-  stockAllocation: 0.60,
-  bondAllocation: 0.40,
-  annualSpending: 40_000,
-  inflation: 0.025,
-  statePensionToday: 12_547,
-  person1Age: 57,
-  person2Age: 58,
-  person1StatePensionAge: 67,
-  person2StatePensionAge: 67,
-  monteCarloRuns: 5_000,
-  seed: 12_345,
-  rules: {
-    upperGuardrail: 1.2,
-    lowerGuardrail: 0.8,
-    cutPct: 0.1,
-    raisePct: 0.1,
-    skipInflationAfterNegativeReturn: true,
-  },
-  assumptions: {
-    stockReturn: 0.07,
-    stockVol: 0.18,
-    bondReturn: 0.02,
-    bondVol: 0.06,
-  },
-};
+export const stressScenarios=[
 
-export const stressTestLibrary = [
-  {
-    key: "deep-bear-start",
-    name: "Deep bear at retirement",
-    description: "A severe equity-led drawdown arrives immediately, when withdrawals are most fragile.",
-    stockReturns: [-0.30, -0.18, -0.09, 0.04, 0.08, 0.10],
-    bondReturns: [0.03, 0.04, 0.03, 0.02, 0.02, 0.02],
-  },
-  {
-    key: "early-crash",
-    name: "Early crash with weak rebound",
-    description: "Losses hit in the first years and the recovery is slow rather than V-shaped.",
-    stockReturns: [-0.24, -0.12, -0.04, 0.03, 0.05, 0.06, 0.07],
-    bondReturns: [0.04, 0.03, 0.03, 0.02, 0.02, 0.02, 0.02],
-  },
-  {
-    key: "lost-decade",
-    name: "Lost decade",
-    description: "Low and choppy equity returns persist for a full decade before normal conditions resume.",
-    stockReturns: [-0.10, 0.03, -0.08, 0.02, -0.03, 0.04, 0.01, -0.02, 0.05, 0.02],
-    bondReturns: [0.04, 0.03, 0.04, 0.03, 0.03, 0.03, 0.02, 0.02, 0.03, 0.03],
-  },
-  {
-    key: "inflation-shock",
-    name: "Inflation shock",
-    description: "Inflation stays high early on while both stocks and bonds deliver weak real support.",
-    stockReturns: [-0.14, -0.07, 0.01, 0.03, 0.04, 0.05],
-    bondReturns: [-0.11, -0.06, -0.02, 0.01, 0.02, 0.02],
-    inflationPath: [0.075, 0.065, 0.05, 0.04, 0.035, 0.03],
-  },
-  {
-    key: "bond-shock",
-    name: "Bond shock",
-    description: "Equities are tolerable but defensive assets fail to cushion the plan early on.",
-    stockReturns: [0.07, 0.06, 0.06, 0.07, 0.07],
-    bondReturns: [-0.15, -0.08, -0.03, 0.01, 0.02],
-  },
-  {
-    key: "flat-real-returns",
-    name: "Flat real returns",
-    description: "Nominal returns continue, but inflation keeps most of the gain from compounding.",
-    stockReturns: [0.05, 0.05, 0.05, 0.05, 0.05, 0.05, 0.05],
-    bondReturns: [0.02, 0.02, 0.02, 0.02, 0.02, 0.02, 0.02],
-    inflationPath: [0.045, 0.04, 0.04, 0.035, 0.035, 0.03, 0.03],
-  },
-  {
-    key: "late-crash",
-    name: "Late retirement crash",
-    description: "The plan compounds for years, then suffers a large setback later in retirement.",
-    stockReturns: [0.09, 0.08, 0.08, 0.07, 0.08, 0.07, 0.07, -0.22, -0.15, -0.08],
-    bondReturns: [0.02, 0.03, 0.02, 0.03, 0.02, 0.02, 0.02, 0.03, 0.03, 0.02],
-  },
-  {
-    key: "reverse-order",
-    name: "Reverse order",
-    description: "Good and bad years are rearranged so weak years come first and strong years arrive later.",
-    stockReturns: [-0.18, -0.12, -0.05, 0.03, 0.06, 0.09, 0.12, 0.14],
-    bondReturns: [0.04, 0.03, 0.03, 0.03, 0.02, 0.02, 0.02, 0.02],
-  },
-];
+{name:"Early crash"},
+{name:"Lost decade"},
+{name:"Inflation shock"},
+{name:"Bond crash"},
+{name:"Late crash"},
+{name:"Reverse returns"},
+{name:"High inflation"},
+{name:"Great decade"}
+
+]
