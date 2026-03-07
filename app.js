@@ -88,15 +88,21 @@ let cashflowChartInstance = null;
 let portfolioChartInstance = null;
 let ruinChartInstance = null;
 
-function renderCashflowChart(records) {
-  const canvas = document.getElementById("cashflowChart");
-  if (!canvas) return;
+function buildChart(canvasId, config) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return null;
 
+  canvas.height = 360;
+
+  return new Chart(canvas, config);
+}
+
+function renderCashflowChart(records) {
   if (cashflowChartInstance) {
     cashflowChartInstance.destroy();
   }
 
-  cashflowChartInstance = new Chart(canvas, {
+  cashflowChartInstance = buildChart("cashflowChart", {
     type: "line",
     data: {
       labels: records.map((r) => `Year ${r.year}`),
@@ -104,25 +110,23 @@ function renderCashflowChart(records) {
         {
           label: "Total household spending",
           data: records.map((r) => r.spendingTarget),
-          borderWidth: 2,
-          tension: 0.2
+          borderWidth: 2
         },
         {
           label: "State pension income",
           data: records.map((r) => r.statePensionIncome),
-          borderWidth: 2,
-          tension: 0.2
+          borderWidth: 2
         },
         {
           label: "Portfolio withdrawals",
           data: records.map((r) => r.withdrawal),
-          borderWidth: 2,
-          tension: 0.2
+          borderWidth: 2
         }
       ]
     },
     options: {
       responsive: true,
+      maintainAspectRatio: false,
       plugins: {
         legend: {
           position: "top"
@@ -138,14 +142,11 @@ function renderCashflowChart(records) {
 }
 
 function renderPortfolioChart(yearlyPercentiles) {
-  const canvas = document.getElementById("portfolioChart");
-  if (!canvas) return;
-
   if (portfolioChartInstance) {
     portfolioChartInstance.destroy();
   }
 
-  portfolioChartInstance = new Chart(canvas, {
+  portfolioChartInstance = buildChart("portfolioChart", {
     type: "line",
     data: {
       labels: yearlyPercentiles.map((r) => `Year ${r.year}`),
@@ -153,25 +154,23 @@ function renderPortfolioChart(yearlyPercentiles) {
         {
           label: "P10 portfolio",
           data: yearlyPercentiles.map((r) => r.p10),
-          borderWidth: 2,
-          tension: 0.2
+          borderWidth: 2
         },
         {
           label: "Median portfolio",
           data: yearlyPercentiles.map((r) => r.median),
-          borderWidth: 2,
-          tension: 0.2
+          borderWidth: 2
         },
         {
           label: "P90 portfolio",
           data: yearlyPercentiles.map((r) => r.p90),
-          borderWidth: 2,
-          tension: 0.2
+          borderWidth: 2
         }
       ]
     },
     options: {
       responsive: true,
+      maintainAspectRatio: false,
       plugins: {
         legend: {
           position: "top"
@@ -187,14 +186,11 @@ function renderPortfolioChart(yearlyPercentiles) {
 }
 
 function renderRuinChart(depletionProbabilityByYear) {
-  const canvas = document.getElementById("ruinChart");
-  if (!canvas) return;
-
   if (ruinChartInstance) {
     ruinChartInstance.destroy();
   }
 
-  ruinChartInstance = new Chart(canvas, {
+  ruinChartInstance = buildChart("ruinChart", {
     type: "line",
     data: {
       labels: depletionProbabilityByYear.map((r) => `Year ${r.year}`),
@@ -202,13 +198,13 @@ function renderRuinChart(depletionProbabilityByYear) {
         {
           label: "Probability of depletion",
           data: depletionProbabilityByYear.map((r) => r.probability * 100),
-          borderWidth: 2,
-          tension: 0.2
+          borderWidth: 2
         }
       ]
     },
     options: {
       responsive: true,
+      maintainAspectRatio: false,
       plugins: {
         legend: {
           position: "top"
