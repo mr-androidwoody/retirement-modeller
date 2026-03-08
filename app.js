@@ -32,6 +32,14 @@ const FIELD_IDS = [
   "person2PensionAmount"
 ];
 
+const FORMATTED_NUMBER_IDS = [
+  "simulationRuns",
+  "initialPortfolio",
+  "initialSpending",
+  "person1PensionAmount",
+  "person2PensionAmount"
+];
+
 const toggleIds = [
   "skipInflationAfterNegative",
   "showRealValues",
@@ -41,6 +49,10 @@ const toggleIds = [
 let portfolioChart = null;
 let spendingChart = null;
 let stressChart = null;
+let simWorker = null;
+let currentRequestId = 0;
+
+const runButtonDefaultLabel = "Run simulation";
 
 document.addEventListener("DOMContentLoaded", () => {
   applyDefaults();
@@ -56,8 +68,9 @@ function wireEvents() {
   });
 
   for (const id of FIELD_IDS) {
-    document.getElementById(id).addEventListener("input", handleLiveUiState);
-    document.getElementById(id).addEventListener("change", handleLiveUiState);
+    const el = document.getElementById(id);
+    el.addEventListener("input", handleLiveUiState);
+    el.addEventListener("change", handleLiveUiState);
   }
 
   for (const id of toggleIds) {
@@ -70,15 +83,33 @@ function wireEvents() {
       }
     });
   }
+
+  bindFormattedNumberInputs();
+}
+
+function bindFormattedNumberInputs() {
+  for (const id of FORMATTED_NUMBER_IDS) {
+    const input = document.getElementById(id);
+
+    input.addEventListener("focus", () => {
+      input.value = stripCommas(input.value);
+    });
+
+    input.addEventListener("blur", () => {
+      const value = parseLooseNumber(input.value);
+      input.value = value === 0 && input.value.trim() === "" ? "" : formatWholeNumber(value);
+      handleLiveUiState();
+    });
+  }
 }
 
 function applyDefaults() {
   const defaults = getDefaultInputs();
 
   setValue("years", defaults.years);
-  setValue("simulationRuns", defaults.simulationRuns);
-  setValue("initialPortfolio", defaults.initialPortfolio);
-  setValue("initialSpending", defaults.initialSpending);
+  setValue("simulationRuns", formatWholeNumber(defaults.simulationRuns));
+  setValue("initialPortfolio", formatWholeNumber(defaults.initialPortfolio));
+  setValue("initialSpending", formatWholeNumber(defaults.initialSpending));
   setValue("inflationRate", defaults.inflationRate);
   setValue("rebalanceAnnually", String(defaults.rebalanceAnnually));
 
@@ -100,11 +131,11 @@ function applyDefaults() {
 
   setValue("person1Age", defaults.person1Age);
   setValue("person1PensionAge", defaults.person1PensionAge);
-  setValue("person1PensionAmount", defaults.person1PensionAmount);
+  setValue("person1PensionAmount", formatWholeNumber(defaults.person1PensionAmount));
 
   setValue("person2Age", defaults.person2Age);
   setValue("person2PensionAge", defaults.person2PensionAge);
-  setValue("person2PensionAmount", defaults.person2PensionAmount);
+  setValue("person2PensionAmount", formatWholeNumber(defaults.person2PensionAmount));
 
   document.getElementById("skipInflationAfterNegative").checked = true;
   document.getElementById("showRealValues").checked = true;
@@ -141,13 +172,72 @@ function runSimulation() {
     clearCharts();
     clearSummary();
     clearTable();
+    setBusyState(false);
     return;
   }
 
-  const result = runRetirementSimulation(inputs);
-  renderSummary(result);
-  renderCharts(result);
-  renderTable(result);
+  currentRequestId += 1;
+  const requestId = currentRequestId;
+
+  setBusyState(true);
+
+  const worker = getWorker();
+  worker.postMessage({
+    type: "run-simulation",
+    requestId,
+    inputs
+  });
+}
+
+function getWorker() {
+  if (simWorker) return simWorker;
+
+  simWorker = new Worker("./worker.js", { type: "module" });
+
+  simWorker.addEventListener("message", (event) => {
+    const { type, requestId, result, errors } = event.data || {};
+
+    if (requestId !== currentRequestId) {
+      return;
+    }
+
+    if (type === "simulation-result") {
+      setBusyState(false);
+      renderValidation([]);
+      renderSummary(result);
+      renderCharts(result);
+      renderTable(result);
+      return;
+    }
+
+    if (type === "simulation-error") {
+      setBusyState(false);
+      renderValidation([errors || "Simulation failed."]);
+      clearCharts();
+      clearSummary();
+      clearTable();
+    }
+  });
+
+  simWorker.addEventListener("error", () => {
+    setBusyState(false);
+    renderValidation(["Simulation worker failed."]);
+    clearCharts();
+    clearSummary();
+    clearTable();
+  });
+
+  return simWorker;
+}
+
+function setBusyState(isBusy) {
+  const runBtn = document.getElementById("runSimulationBtn");
+  const resetBtn = document.getElementById("resetDefaultsBtn");
+
+  runBtn.disabled = isBusy;
+  resetBtn.disabled = isBusy;
+
+  runBtn.textContent = isBusy ? "Running…" : runButtonDefaultLabel;
 }
 
 function collectInputs() {
@@ -248,19 +338,19 @@ function renderCharts(result) {
   portfolioChart = new Chart(document.getElementById("portfolioChart"), {
     type: "line",
     data: buildPortfolioChartData(result, realValues),
-    options: buildLineChartOptions("£")
+    options: buildLineChartOptions()
   });
 
   spendingChart = new Chart(document.getElementById("spendingChart"), {
     type: "line",
     data: buildSpendingChartData(result, realValues),
-    options: buildLineChartOptions("£")
+    options: buildLineChartOptions()
   });
 
   stressChart = new Chart(document.getElementById("stressChart"), {
     type: "line",
     data: buildStressChartData(result, realValues),
-    options: buildLineChartOptions("£")
+    options: buildLineChartOptions()
   });
 }
 
@@ -448,10 +538,12 @@ function buildStressChartData(result, realValues) {
   return { labels, datasets };
 }
 
-function buildLineChartOptions(prefix) {
+function buildLineChartOptions() {
   return {
     responsive: true,
     maintainAspectRatio: false,
+    animation: false,
+    normalized: true,
     interaction: {
       mode: "index",
       intersect: false
@@ -589,8 +681,32 @@ function setValue(id, value) {
 }
 
 function readNumber(id) {
-  const value = Number(document.getElementById(id).value);
-  return Number.isFinite(value) ? value : 0;
+  const raw = document.getElementById(id).value;
+  return parseLooseNumber(raw);
+}
+
+function parseLooseNumber(value) {
+  const cleaned = String(value ?? "")
+    .replace(/,/g, "")
+    .replace(/[^\d.-]/g, "")
+    .trim();
+
+  if (cleaned === "" || cleaned === "-" || cleaned === "." || cleaned === "-.") {
+    return 0;
+  }
+
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function stripCommas(value) {
+  return String(value ?? "").replace(/,/g, "");
+}
+
+function formatWholeNumber(value) {
+  return new Intl.NumberFormat("en-GB", {
+    maximumFractionDigits: 0
+  }).format(Number(value) || 0);
 }
 
 function formatCurrency(value) {

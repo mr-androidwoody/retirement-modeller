@@ -69,27 +69,56 @@
 
     <section class="summary-grid" id="summaryGrid">
       <article class="summary-card">
-        <div class="summary-label">Monte Carlo success rate</div>
+        <div class="summary-head">
+          <div class="summary-label">Monte Carlo success rate</div>
+          <button
+            type="button"
+            class="info-dot"
+            aria-label="Runs that do not deplete before the selected end year"
+            title="Runs that do not deplete before the selected end year"
+          >i</button>
+        </div>
         <div class="summary-value" id="successRateValue">—</div>
-        <div class="summary-note">Runs that do not deplete before the selected end year</div>
       </article>
 
       <article class="summary-card">
-        <div class="summary-label">Median end portfolio</div>
+        <div class="summary-head">
+          <div class="summary-label">Median end portfolio</div>
+          <button
+            type="button"
+            class="info-dot"
+            aria-label="50th percentile ending value in selected display terms"
+            title="50th percentile ending value in selected display terms"
+          >i</button>
+        </div>
         <div class="summary-value" id="medianEndingValue">—</div>
-        <div class="summary-note">50th percentile ending value in selected display terms</div>
       </article>
 
       <article class="summary-card">
-        <div class="summary-label">Worst stress scenario</div>
+        <div class="summary-head">
+          <div class="summary-label">Worst stress scenario</div>
+          <button
+            type="button"
+            class="info-dot"
+            aria-label="Stagnation: This was the weakest non-random stress result."
+            title="Stagnation: This was the weakest non-random stress result."
+          >i</button>
+        </div>
         <div class="summary-value" id="worstStressValue">—</div>
         <div class="summary-note" id="worstStressNote">—</div>
       </article>
 
       <article class="summary-card">
-        <div class="summary-label">Cash runway at start</div>
+        <div class="summary-head">
+          <div class="summary-label">Cash runway at start</div>
+          <button
+            type="button"
+            class="info-dot"
+            aria-label="Years of spending covered by cash / QMMF at outset"
+            title="Years of spending covered by cash / QMMF at outset"
+          >i</button>
+        </div>
         <div class="summary-value" id="cashRunwayValue">—</div>
-        <div class="summary-note">Years of spending covered by cash / QMMF at outset</div>
       </article>
     </section>
 
@@ -108,17 +137,17 @@
 
             <label class="field">
               <span>Monte Carlo runs</span>
-              <input id="simulationRuns" type="number" min="100" max="20000" step="100" />
+              <input id="simulationRuns" type="text" inputmode="numeric" />
             </label>
 
             <label class="field">
               <span>Initial portfolio (£)</span>
-              <input id="initialPortfolio" type="number" min="0" step="1000" />
+              <input id="initialPortfolio" type="text" inputmode="decimal" />
             </label>
 
             <label class="field">
               <span>Initial household spending (£)</span>
-              <input id="initialSpending" type="number" min="0" step="100" />
+              <input id="initialSpending" type="text" inputmode="decimal" />
             </label>
 
             <label class="field">
@@ -237,7 +266,7 @@
 
             <label class="field">
               <span>Person 1 pension today (£)</span>
-              <input id="person1PensionAmount" type="number" min="0" step="100" />
+              <input id="person1PensionAmount" type="text" inputmode="decimal" />
             </label>
 
             <label class="field">
@@ -252,7 +281,7 @@
 
             <label class="field">
               <span>Person 2 pension today (£)</span>
-              <input id="person2PensionAmount" type="number" min="0" step="100" />
+              <input id="person2PensionAmount" type="text" inputmode="decimal" />
             </label>
           </div>
         </div>
