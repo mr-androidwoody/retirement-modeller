@@ -483,7 +483,7 @@ function drawLineChart(canvas, config) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
 
-  const padding = { top: 20, right: 20, bottom: 44, left: 72 };
+  const padding = { top: 20, right: 20, bottom: 56, left: 72 };
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
 
@@ -636,24 +636,34 @@ function drawXAxis(ctx, labels, width, height, padding) {
 function drawLegend(ctx, lines, width, height) {
   const startX = 20;
   let x = startX;
-  let y = height - 16;
+  let y = height - 18;
+  const boxSize = 12;
+  const gap = 8;
+  const itemSpacing = 16;
+  const rowHeight = 20;
 
   ctx.font = "12px Inter, system-ui, sans-serif";
   ctx.textBaseline = "middle";
+  ctx.textAlign = "left";
 
   lines.forEach((line) => {
     const labelWidth = ctx.measureText(line.label).width;
-    if (x + 20 + labelWidth > width - 20) {
+    const itemWidth = boxSize + gap + labelWidth;
+
+    if (x + itemWidth > width - 20) {
       x = startX;
-      y -= 18;
+      y -= rowHeight;
     }
 
+    const boxY = y - boxSize / 2;
+
     ctx.fillStyle = line.color;
-    ctx.fillRect(x, y - 5, 12, 12);
+    ctx.fillRect(x, boxY, boxSize, boxSize);
 
     ctx.fillStyle = "#657086";
-    ctx.fillText(line.label, x + 18, y + 1);
-    x += 26 + labelWidth;
+    ctx.fillText(line.label, x + boxSize + gap, y);
+
+    x += itemWidth + itemSpacing;
   });
 }
 
