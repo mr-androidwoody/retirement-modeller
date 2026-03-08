@@ -1,323 +1,165 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Retirement Simulator</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta
-    name="description"
-    content="Monte Carlo testing with Guyton-Klinger guardrails and state pension offsets"
-  />
-  <link rel="stylesheet" href="style.css" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <script type="module" src="app.js" defer></script>
-</head>
-<body>
-  <div class="page-shell">
-    <header class="page-header">
-      <div class="page-title-wrap">
-        <h1>Retirement Simulator</h1>
-        <p class="intro-copy">
-          Plan assessment. Monte Carlo results are shown alongside deterministic stress paths so you can see both probability and vulnerability.
-        </p>
-        <div class="context-chips">
-          <span class="chip"><span class="chip-label">Spending rule</span><strong>Guyton-Klinger</strong></span>
-          <span class="chip"><span class="chip-label">Income offset</span><strong>State pension</strong></span>
-          <span class="chip"><span class="chip-label">Stress path set</span><strong>8 scenarios</strong></span>
-        </div>
-      </div>
-    </header>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Retirement Simulator V2</title>
 
-    <section class="summary-band">
-      <article class="metric-card">
-        <div class="metric-label">Monte Carlo success rate</div>
-        <div class="metric-value" id="successRateValue">—</div>
-        <div class="metric-note">Runs that do not deplete before the selected end year.</div>
-      </article>
+    <link rel="stylesheet" href="./style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
 
-      <article class="metric-card">
-        <div class="metric-label">Median end portfolio</div>
-        <div class="metric-value" id="medianEndingValue">—</div>
-        <div class="metric-note">50th percentile ending value in selected display terms.</div>
-      </article>
+  <body>
+    <main class="container">
+      <h1>Retirement Simulator V2</h1>
 
-      <article class="metric-card">
-        <div class="metric-label">Worst stress scenario</div>
-        <div class="metric-value" id="worstStressValue">—</div>
-        <div class="metric-note" id="worstStressNote">Weakest non-random stress result.</div>
-      </article>
+      <section class="panel">
+        <h2>Inputs</h2>
 
-      <article class="metric-card">
-        <div class="metric-label">Cash runway at start</div>
-        <div class="metric-value" id="cashRunwayValue">—</div>
-        <div class="metric-note">Years of spending covered by cash / QMMF at outset.</div>
-      </article>
-    </section>
+        <div class="input-grid">
+          <div class="field">
+            <label for="startPortfolio">Starting portfolio (£)</label>
+            <input id="startPortfolio" type="text" inputmode="numeric" />
+          </div>
 
-    <section class="controls-row">
-      <label class="toggle-pill" title="If enabled, spending does not get an inflation increase after a negative portfolio-return year.">
-        <input type="checkbox" id="skipInflationAfterNegative" checked />
-        <span>Skip inflation increase after a negative market year</span>
-      </label>
+          <div class="field field-with-slider">
+            <label for="annualSpending">Annual spending (£)</label>
+            <input id="annualSpending" type="text" inputmode="numeric" />
+            <input
+              id="annualSpendingSlider"
+              type="range"
+              min="10000"
+              max="120000"
+              step="1000"
+            />
+          </div>
 
-      <label class="toggle-pill" title="Show values in today's money rather than nominal future pounds.">
-        <input type="checkbox" id="showRealValues" checked />
-        <span>Show real values</span>
-      </label>
+          <div class="field field-with-slider">
+            <label for="stockAllocation">Equity allocation (%)</label>
+            <input
+              id="stockAllocation"
+              type="number"
+              min="0"
+              max="100"
+              step="1"
+            />
+            <input
+              id="stockAllocationSlider"
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+            />
+          </div>
 
-      <label class="toggle-pill" title="Show the full yearly median-path output table.">
-        <input type="checkbox" id="showFullTable" checked />
-        <span>Show full yearly table</span>
-      </label>
+          <div class="field">
+            <label for="bondAllocation">Bond allocation (%)</label>
+            <input
+              id="bondAllocation"
+              type="number"
+              min="0"
+              max="100"
+              step="1"
+              readonly
+            />
+          </div>
 
-      <div class="controls-actions">
-        <button id="runSimulationBtn" class="btn btn-primary">Run simulation</button>
-        <button id="resetDefaultsBtn" class="btn btn-secondary">Reset defaults</button>
-      </div>
-    </section>
+          <div class="field">
+            <label for="years">Simulation years</label>
+            <input id="years" type="number" min="1" step="1" />
+          </div>
 
-    <div class="status-row">
-      <div class="status-pill hidden" id="runStatus">Running Monte Carlo…</div>
-      <div class="validation-banner hidden" id="validationBanner"></div>
-    </div>
+          <div class="field">
+            <label for="monteCarloRuns">Monte Carlo runs</label>
+            <input id="monteCarloRuns" type="text" inputmode="numeric" />
+          </div>
 
-    <main class="main-layout">
-      <aside class="input-panel">
-        <div class="panel-section">
-          <h2>Plan inputs</h2>
+          <div class="field">
+            <label for="seed">Random seed</label>
+            <input id="seed" type="number" min="1" step="1" />
+          </div>
 
-          <div class="field-grid">
-            <label class="field">
-              <span>Retirement period</span>
-              <input id="years" type="number" min="1" max="60" step="1" />
-            </label>
+          <div class="field">
+            <label for="inflation">Inflation (%)</label>
+            <input id="inflation" type="number" min="0" step="0.1" />
+          </div>
 
-            <label class="field" title="Number of random simulations. Higher numbers smooth the probability estimate but take longer to run.">
-              <span>Monte Carlo runs <span class="help">?</span></span>
-              <input id="simulationRuns" type="text" inputmode="numeric" />
-            </label>
+          <div class="field">
+            <label for="person1Age">Person 1 age</label>
+            <input id="person1Age" type="number" min="1" step="1" />
+          </div>
 
-            <label class="field">
-              <span>Initial portfolio (£)</span>
-              <input id="initialPortfolio" type="text" inputmode="decimal" />
-            </label>
+          <div class="field">
+            <label for="person2Age">Person 2 age</label>
+            <input id="person2Age" type="number" min="1" step="1" />
+          </div>
 
-            <label class="field">
-              <span>Initial household spending (£)</span>
-              <input id="initialSpending" type="text" inputmode="decimal" />
-            </label>
+          <div class="field">
+            <label for="person1StatePensionAge">Person 1 state pension age</label>
+            <input
+              id="person1StatePensionAge"
+              type="number"
+              min="1"
+              step="1"
+            />
+          </div>
 
-            <label class="field">
-              <span>Inflation assumption (%)</span>
-              <input id="inflationRate" type="number" step="0.1" />
-            </label>
+          <div class="field">
+            <label for="person2StatePensionAge">Person 2 state pension age</label>
+            <input
+              id="person2StatePensionAge"
+              type="number"
+              min="1"
+              step="1"
+            />
+          </div>
 
-            <label class="field" title="If enabled, the portfolio is reset each year to the target equity, bond and cashlike weights.">
-              <span>Annual rebalance to target <span class="help">?</span></span>
-              <select id="rebalanceAnnually">
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-              </select>
-            </label>
+          <div class="field">
+            <label for="statePensionToday">State pension today (£)</label>
+            <input id="statePensionToday" type="text" inputmode="numeric" />
           </div>
         </div>
 
-        <div class="panel-section">
-          <div class="section-heading">
-            <h3>Portfolio mix</h3>
-            <div class="allocation-total" id="allocationTotal">Allocation total: —</div>
-          </div>
-
-          <div class="allocation-grid">
-            <label class="field">
-              <span>Equities (%)</span>
-              <input id="equityAllocation" type="number" min="0" max="100" step="1" />
-            </label>
-
-            <label class="field">
-              <span>Bonds (%)</span>
-              <input id="bondAllocation" type="number" min="0" max="100" step="1" />
-            </label>
-
-            <label class="field" title="Cashlike assets include cash savings, money-market funds and QMMF holdings used as a drawdown buffer.">
-              <span>Cashlike (%) <span class="help">?</span></span>
-              <input id="cashAllocation" type="number" min="0" max="100" step="1" />
-            </label>
-          </div>
+        <div class="button-row">
+          <button id="runBtn" type="button">Run simulation</button>
+          <button id="resetBtn" type="button">Reset to defaults</button>
         </div>
 
-        <div class="panel-section">
-          <h3>Return assumptions</h3>
+        <div id="errorBox" class="error-box" role="alert" aria-live="polite"></div>
+      </section>
 
-          <div class="field-grid">
-            <label class="field">
-              <span>Equity return (%)</span>
-              <input id="equityReturn" type="number" step="0.1" />
-            </label>
+      <section class="panel">
+        <h2>View options</h2>
 
-            <label class="field">
-              <span>Equity volatility (%)</span>
-              <input id="equityVolatility" type="number" step="0.1" />
-            </label>
-
-            <label class="field">
-              <span>Bond return (%)</span>
-              <input id="bondReturn" type="number" step="0.1" />
-            </label>
-
-            <label class="field">
-              <span>Bond volatility (%)</span>
-              <input id="bondVolatility" type="number" step="0.1" />
-            </label>
-
-            <label class="field" title="Expected annual return for cashlike holdings such as QMMF.">
-              <span>Cashlike return (%) <span class="help">?</span></span>
-              <input id="cashReturn" type="number" step="0.1" />
-            </label>
-
-            <label class="field" title="Expected annual volatility for cashlike holdings. Usually low relative to equities and bonds.">
-              <span>Cashlike volatility (%) <span class="help">?</span></span>
-              <input id="cashVolatility" type="number" step="0.1" />
-            </label>
-          </div>
+        <div class="button-row">
+          <button id="valueModeBtn" type="button">Show real values</button>
+          <button id="toggleTableBtn" type="button">Show yearly detail</button>
         </div>
+      </section>
 
-        <div class="panel-section">
-          <h3 title="A spending rule that adjusts withdrawals when the implied withdrawal rate moves outside selected guardrails.">Guyton-Klinger guardrails <span class="help">?</span></h3>
+      <section id="summary" class="summary-grid"></section>
 
-          <div class="field-grid">
-            <label class="field">
-              <span>Initial withdrawal rate (%)</span>
-              <input id="initialWithdrawalRate" type="number" step="0.1" />
-            </label>
+      <section class="chart-wrap">
+        <h2>Spending vs Income vs Withdrawals</h2>
+        <canvas id="cashflowChart"></canvas>
+      </section>
 
-            <label class="field" title="If the current withdrawal rate rises above this threshold versus the starting rate, spending is cut by the adjustment size.">
-              <span>Upper guardrail (%) <span class="help">?</span></span>
-              <input id="upperGuardrail" type="number" step="1" />
-            </label>
+      <section class="chart-wrap">
+        <h2>Portfolio Paths</h2>
+        <canvas id="portfolioChart"></canvas>
+      </section>
 
-            <label class="field" title="If the current withdrawal rate falls below this threshold versus the starting rate, spending is raised by the adjustment size.">
-              <span>Lower guardrail (%) <span class="help">?</span></span>
-              <input id="lowerGuardrail" type="number" step="1" />
-            </label>
+      <section class="panel">
+        <h2>Downside and Flexibility</h2>
+        <div id="stressSummary" class="summary-grid"></div>
+      </section>
 
-            <label class="field" title="The percentage amount by which portfolio withdrawals are increased or reduced when a guardrail is hit.">
-              <span>Adjustment size (%) <span class="help">?</span></span>
-              <input id="adjustmentPct" type="number" step="1" />
-            </label>
-          </div>
-        </div>
-
-        <div class="panel-section">
-          <h3>State pension offsets</h3>
-
-          <div class="field-grid">
-            <label class="field">
-              <span>Person 1 current age</span>
-              <input id="person1Age" type="number" min="18" max="100" step="1" />
-            </label>
-
-            <label class="field">
-              <span>Person 1 pension age</span>
-              <input id="person1PensionAge" type="number" min="50" max="100" step="1" />
-            </label>
-
-            <label class="field">
-              <span>Person 1 pension today (£)</span>
-              <input id="person1PensionAmount" type="text" inputmode="decimal" />
-            </label>
-
-            <label class="field">
-              <span>Person 2 current age</span>
-              <input id="person2Age" type="number" min="18" max="100" step="1" />
-            </label>
-
-            <label class="field">
-              <span>Person 2 pension age</span>
-              <input id="person2PensionAge" type="number" min="50" max="100" step="1" />
-            </label>
-
-            <label class="field">
-              <span>Person 2 pension today (£)</span>
-              <input id="person2PensionAmount" type="text" inputmode="decimal" />
-            </label>
-          </div>
-        </div>
-
-        <div class="panel-section">
-          <details class="advanced-box">
-            <summary>Advanced settings</summary>
-            <div class="field-grid advanced-grid">
-              <label class="field" title="Optional random seed for reproducible Monte Carlo runs. Leave blank for a new sequence each time.">
-                <span>Seed input <span class="help">?</span></span>
-                <input id="randomSeed" type="text" inputmode="numeric" placeholder="Auto" />
-              </label>
-            </div>
-          </details>
-        </div>
-      </aside>
-
-      <section class="content-column">
-        <article class="note-card">
-          <h3>Model logic note</h3>
-          <p>
-            Total household spending starts from the initial withdrawal amount and normally rises with inflation. If the inflation-skip rule is enabled, inflation increases are skipped after negative return years. State pension starts at the chosen pension age for each person and reduces the amount drawn from the portfolio. Withdrawals are taken from cashlike assets first, then bonds, then equities.
-          </p>
-        </article>
-
-        <article class="chart-card">
-          <div class="card-header">
-            <div>
-              <h3>Portfolio Projection</h3>
-              <p>10th, 50th and 90th percentile portfolio paths</p>
-            </div>
-          </div>
-          <div class="chart-wrap">
-            <canvas id="portfolioChart"></canvas>
-          </div>
-        </article>
-
-        <article class="chart-card">
-          <div class="card-header">
-            <div>
-              <h3>Annual Household Spending Path</h3>
-              <p>Household spending, portfolio withdrawals and state pension income</p>
-            </div>
-          </div>
-          <div class="chart-wrap">
-            <canvas id="spendingChart"></canvas>
-          </div>
-        </article>
-
-        <article class="chart-card">
-          <div class="card-header">
-            <div>
-              <h3 title="Fixed stress paths designed to show vulnerability to poor return order, inflation spikes and stagnation.">Sequence of Returns Stress Tests <span class="help">?</span></h3>
-              <p>Deterministic stress paths using the same spending rule and pension offsets</p>
-            </div>
-          </div>
-          <div class="chart-wrap">
-            <canvas id="stressChart"></canvas>
-          </div>
-        </article>
-
-        <article class="table-card" id="yearlyTableCard">
-          <div class="card-header">
-            <div>
-              <h3>Yearly projection</h3>
-              <p>Median path from the Monte Carlo simulation</p>
-            </div>
-          </div>
-
-          <div class="table-wrap">
-            <table id="resultsTable">
-              <thead></thead>
-              <tbody></tbody>
-            </table>
-          </div>
-        </article>
+      <section id="yearlyDetailSection" class="section" style="display: none;">
+        <h2>Yearly detail</h2>
+        <div id="results-table"></div>
       </section>
     </main>
-  </div>
-</body>
+
+    <script type="module" src="./app.js"></script>
+  </body>
 </html>
