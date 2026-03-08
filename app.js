@@ -483,7 +483,7 @@ function drawLineChart(canvas, config) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
 
-  const padding = { top: 20, right: 20, bottom: 56, left: 72 };
+  const padding = { top: 20, right: 20, bottom: 56, left: 110 };
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
 
