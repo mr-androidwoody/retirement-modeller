@@ -56,7 +56,8 @@ body{
 
 .intro{
   margin:0;
-  max-width:980px;
+  max-width:none;
+  width:100%;
   font-size:1rem;
   line-height:1.55;
   color:var(--muted);
