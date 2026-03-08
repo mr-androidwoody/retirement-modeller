@@ -1,9 +1,4 @@
 {
-  "name": "retirement-simulator",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "start": "npx serve ."
-  }
+"name":"retirement-simulator",
+"type":"module"
 }

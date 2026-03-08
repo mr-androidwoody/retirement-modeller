@@ -1,165 +1,189 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Retirement Simulator V2</title>
+<head>
+<meta charset="UTF-8">
+<title>Retirement Simulator</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
-    <link rel="stylesheet" href="./style.css" />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  </head>
+<link rel="stylesheet" href="style.css">
 
-  <body>
-    <main class="container">
-      <h1>Retirement Simulator V2</h1>
+<script type="module" src="app.js" defer></script>
+</head>
 
-      <section class="panel">
-        <h2>Inputs</h2>
+<body>
 
-        <div class="input-grid">
-          <div class="field">
-            <label for="startPortfolio">Starting portfolio (£)</label>
-            <input id="startPortfolio" type="text" inputmode="numeric" />
-          </div>
+<header class="top-header">
 
-          <div class="field field-with-slider">
-            <label for="annualSpending">Annual spending (£)</label>
-            <input id="annualSpending" type="text" inputmode="numeric" />
-            <input
-              id="annualSpendingSlider"
-              type="range"
-              min="10000"
-              max="120000"
-              step="1000"
-            />
-          </div>
+<div class="title-area">
+<h1>Retirement Simulator</h1>
+<p>Monte Carlo testing with Guyton-Klinger guardrails and state pension offsets</p>
+</div>
 
-          <div class="field field-with-slider">
-            <label for="stockAllocation">Equity allocation (%)</label>
-            <input
-              id="stockAllocation"
-              type="number"
-              min="0"
-              max="100"
-              step="1"
-            />
-            <input
-              id="stockAllocationSlider"
-              type="range"
-              min="0"
-              max="100"
-              step="1"
-            />
-          </div>
+<div class="top-controls">
 
-          <div class="field">
-            <label for="bondAllocation">Bond allocation (%)</label>
-            <input
-              id="bondAllocation"
-              type="number"
-              min="0"
-              max="100"
-              step="1"
-              readonly
-            />
-          </div>
+<label class="checkbox">
+<input type="checkbox" id="skipInflation" checked>
+Skip inflation increase after a negative market year
+</label>
 
-          <div class="field">
-            <label for="years">Simulation years</label>
-            <input id="years" type="number" min="1" step="1" />
-          </div>
+<button id="runSim" class="primary-btn">Run simulation</button>
 
-          <div class="field">
-            <label for="monteCarloRuns">Monte Carlo runs</label>
-            <input id="monteCarloRuns" type="text" inputmode="numeric" />
-          </div>
+<button id="resetBtn" class="secondary-btn">Reset defaults</button>
 
-          <div class="field">
-            <label for="seed">Random seed</label>
-            <input id="seed" type="number" min="1" step="1" />
-          </div>
+<label class="checkbox">
+<input type="checkbox" id="realValues" checked>
+Show real values
+</label>
 
-          <div class="field">
-            <label for="inflation">Inflation (%)</label>
-            <input id="inflation" type="number" min="0" step="0.1" />
-          </div>
+<label class="checkbox">
+<input type="checkbox" id="showTable" checked>
+Show full yearly table
+</label>
 
-          <div class="field">
-            <label for="person1Age">Person 1 age</label>
-            <input id="person1Age" type="number" min="1" step="1" />
-          </div>
+</div>
 
-          <div class="field">
-            <label for="person2Age">Person 2 age</label>
-            <input id="person2Age" type="number" min="1" step="1" />
-          </div>
+</header>
 
-          <div class="field">
-            <label for="person1StatePensionAge">Person 1 state pension age</label>
-            <input
-              id="person1StatePensionAge"
-              type="number"
-              min="1"
-              step="1"
-            />
-          </div>
 
-          <div class="field">
-            <label for="person2StatePensionAge">Person 2 state pension age</label>
-            <input
-              id="person2StatePensionAge"
-              type="number"
-              min="1"
-              step="1"
-            />
-          </div>
+<section class="planner-banner">
 
-          <div class="field">
-            <label for="statePensionToday">State pension today (£)</label>
-            <input id="statePensionToday" type="text" inputmode="numeric" />
-          </div>
-        </div>
+<div>
 
-        <div class="button-row">
-          <button id="runBtn" type="button">Run simulation</button>
-          <button id="resetBtn" type="button">Reset to defaults</button>
-        </div>
+<h2>Professional retirement planner view</h2>
 
-        <div id="errorBox" class="error-box" role="alert" aria-live="polite"></div>
-      </section>
+<p>
+Monte Carlo results are shown alongside deterministic stress paths so you can see both probability and vulnerability.
+</p>
 
-      <section class="panel">
-        <h2>View options</h2>
+</div>
 
-        <div class="button-row">
-          <button id="valueModeBtn" type="button">Show real values</button>
-          <button id="toggleTableBtn" type="button">Show yearly detail</button>
-        </div>
-      </section>
+<div class="planner-tags">
 
-      <section id="summary" class="summary-grid"></section>
+<div class="tag">
+<span>Spending rule</span>
+<b>Guyton-Klinger</b>
+</div>
 
-      <section class="chart-wrap">
-        <h2>Spending vs Income vs Withdrawals</h2>
-        <canvas id="cashflowChart"></canvas>
-      </section>
+<div class="tag">
+<span>Income offset</span>
+<b>State pension</b>
+</div>
 
-      <section class="chart-wrap">
-        <h2>Portfolio Paths</h2>
-        <canvas id="portfolioChart"></canvas>
-      </section>
+<div class="tag">
+<span>Stress path set</span>
+<b>8 scenarios</b>
+</div>
 
-      <section class="panel">
-        <h2>Downside and Flexibility</h2>
-        <div id="stressSummary" class="summary-grid"></div>
-      </section>
+</div>
 
-      <section id="yearlyDetailSection" class="section" style="display: none;">
-        <h2>Yearly detail</h2>
-        <div id="results-table"></div>
-      </section>
-    </main>
+</section>
 
-    <script type="module" src="./app.js"></script>
-  </body>
+
+<main class="layout">
+
+<aside class="inputs">
+
+<h3>Inputs</h3>
+
+<label>
+Retirement years
+<input id="years" type="number" value="30">
+</label>
+
+<label>
+Initial portfolio (£)
+<input id="portfolio" type="number" value="1000000">
+</label>
+
+<label>
+Stock allocation %
+<input id="stocks" type="number" value="100">
+</label>
+
+<label>
+Bond allocation %
+<input id="bonds" type="number" value="0">
+</label>
+
+<label>
+Withdrawal rate %
+<input id="withdrawRate" type="number" value="4">
+</label>
+
+<label>
+Initial withdrawal (£)
+<input id="withdrawAmount" type="number" value="40000">
+</label>
+
+<label>
+Inflation %
+<input id="inflation" type="number" value="2.5">
+</label>
+
+<h4>State Pension</h4>
+
+<label>
+Person 1 age
+<input id="age1" type="number" value="55">
+</label>
+
+<label>
+Person 2 age
+<input id="age2" type="number" value="58">
+</label>
+
+<label>
+State pension (£)
+<input id="pension" type="number" value="12547">
+</label>
+
+</aside>
+
+
+<section class="content">
+
+<div class="card">
+
+<h3>Portfolio Projection</h3>
+
+<canvas id="portfolioChart"></canvas>
+
+<p class="caption">
+Shaded range shows the 10th–90th percentile outcomes.
+</p>
+
+</div>
+
+
+<div class="card">
+
+<h3>Annual Household Spending Path</h3>
+
+<canvas id="spendingChart"></canvas>
+
+</div>
+
+
+<div class="card">
+
+<h3>Sequence of Returns Stress Tests</h3>
+
+<canvas id="stressChart"></canvas>
+
+</div>
+
+
+<div class="card table-card">
+
+<h3>Yearly projection</h3>
+
+<table id="resultsTable"></table>
+
+</div>
+
+</section>
+
+</main>
+
+</body>
 </html>
