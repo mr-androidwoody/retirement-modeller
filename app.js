@@ -1,6 +1,6 @@
 import { DEFAULT_INPUTS, runRetirementSimulation, validateInputs } from "./simulator.js";
 
-const currencyFieldIds = [
+const formattedIntegerFieldIds = [
   "initialPortfolio",
   "initialSpending",
   "person1PensionToday",
@@ -48,14 +48,12 @@ const els = {
   summaryCashRunway: document.getElementById("summaryCashRunway"),
   portfolioChart: document.getElementById("portfolioChart"),
   spendingChart: document.getElementById("spendingChart"),
-  stressChart: document.getElementById("stressChart"),
   tableCard: document.getElementById("tableCard"),
   resultsTable: document.getElementById("resultsTable")
 };
 
 let worker = null;
 let latestResult = null;
-let lastRunInputs = null;
 
 initialise();
 
@@ -79,8 +77,8 @@ function setupWorker() {
         return;
       }
 
-      hideError();
       latestResult = event.data.result;
+      hideError();
       renderAll();
     };
 
@@ -92,45 +90,6 @@ function setupWorker() {
   } catch {
     worker = null;
   }
-}
-
-function attachFormatting() {
-  currencyFieldIds.forEach((id) => {
-    const input = els[id];
-    if (!input) return;
-
-    input.addEventListener("focus", () => {
-      input.value = unformatNumberString(input.value);
-    });
-
-    input.addEventListener("blur", () => {
-      const value = parseLooseNumber(input.value);
-      input.value = input.id === "seed" && input.value.trim() === "" ? "" : formatInputNumber(value);
-    });
-  });
-}
-
-function attachEvents() {
-  els.runSimulationBtn.addEventListener("click", runSimulation);
-  els.resetDefaultsBtn.addEventListener("click", () => {
-    applyDefaults();
-    runSimulation();
-  });
-
-  els.showRealValues.addEventListener("change", () => {
-    if (!latestResult) return;
-    renderAll();
-  });
-
-  els.showFullTable.addEventListener("change", () => {
-    toggleTableVisibility();
-  });
-
-  window.addEventListener("resize", debounce(() => {
-    if (latestResult) {
-      renderCharts();
-    }
-  }, 100));
 }
 
 function applyDefaults() {
@@ -165,13 +124,58 @@ function applyDefaults() {
   toggleTableVisibility();
 }
 
-function setFieldValue(id, value, formatted = false) {
+function attachFormatting() {
+  formattedIntegerFieldIds.forEach((fieldId) => {
+    const input = els[fieldId];
+    if (!input) return;
+
+    input.addEventListener("focus", () => {
+      input.value = unformatNumberString(input.value);
+    });
+
+    input.addEventListener("blur", () => {
+      if (fieldId === "seed" && input.value.trim() === "") {
+        input.value = "";
+        return;
+      }
+
+      const value = parseLooseNumber(input.value);
+      input.value = Number.isFinite(value) ? formatInteger(value) : "";
+    });
+  });
+}
+
+function attachEvents() {
+  els.runSimulationBtn.addEventListener("click", runSimulation);
+
+  els.resetDefaultsBtn.addEventListener("click", () => {
+    applyDefaults();
+    runSimulation();
+  });
+
+  els.showRealValues.addEventListener("change", () => {
+    if (!latestResult) return;
+    renderAll();
+  });
+
+  els.showFullTable.addEventListener("change", () => {
+    toggleTableVisibility();
+  });
+
+  window.addEventListener("resize", debounce(() => {
+    if (latestResult) {
+      renderCharts();
+    }
+  }, 100));
+}
+
+function setFieldValue(id, value, formatAsInteger = false) {
   if (!els[id]) return;
-  els[id].value = formatted ? formatInputNumber(value) : String(value);
+  els[id].value = formatAsInteger ? formatInteger(value) : String(value);
 }
 
 function gatherInputs() {
-  const inputs = {
+  return {
     years: parseLooseInteger(els.years.value),
     initialPortfolio: parseLooseNumber(els.initialPortfolio.value),
     initialSpending: parseLooseNumber(els.initialSpending.value),
@@ -201,27 +205,11 @@ function gatherInputs() {
     showRealValues: els.showRealValues.checked,
     showFullTable: els.showFullTable.checked
   };
-
-  lastRunInputs = inputs;
-  return inputs;
 }
 
 function runSimulation() {
   const inputs = gatherInputs();
-  const errors = validateInputs({
-    ...DEFAULT_INPUTS,
-    ...inputs,
-    equityReturn: Number(inputs.equityReturn),
-    equityVolatility: Number(inputs.equityVolatility),
-    bondReturn: Number(inputs.bondReturn),
-    bondVolatility: Number(inputs.bondVolatility),
-    cashlikeReturn: Number(inputs.cashlikeReturn),
-    cashlikeVolatility: Number(inputs.cashlikeVolatility),
-    inflation: Number(inputs.inflation),
-    upperGuardrail: Number(inputs.upperGuardrail),
-    lowerGuardrail: Number(inputs.lowerGuardrail),
-    adjustmentSize: Number(inputs.adjustmentSize)
-  });
+  const errors = validateInputs({ ...DEFAULT_INPUTS, ...inputs });
 
   if (errors.length > 0) {
     showError(errors.join(" "));
@@ -255,46 +243,55 @@ function renderAll() {
 
 function renderSummary() {
   const useReal = els.showRealValues.checked;
-  const terminalSeries = useReal
-    ? latestResult.monteCarlo.realPercentiles.p50
-    : latestResult.monteCarlo.nominalPercentiles.p50;
-  const medianEnd = terminalSeries[terminalSeries.length - 1];
+  const percentileSeries = useReal
+    ? latestResult.monteCarlo.realPercentiles
+    : latestResult.monteCarlo.nominalPercentiles;
+
+  const medianEnd = percentileSeries.p50[percentileSeries.p50.length - 1];
+  const hasStressSummary = latestResult.summary && latestResult.summary.worstStressName;
 
   els.summarySuccessRate.textContent = formatPercent(latestResult.monteCarlo.successRate);
   els.summaryMedianEnd.textContent = formatCurrency(medianEnd);
-  els.summaryWorstStress.textContent = latestResult.summary.worstStressName;
-  els.summaryWorstStressDesc.textContent = `Lowest ending portfolio across the deterministic stress paths: ${formatCurrency(
-    useReal ? latestResult.summary.worstStressTerminalReal : latestResult.summary.worstStressTerminalNominal
-  )}.`;
 
-  const runway = latestResult.summary.cashRunwayYears;
+  if (hasStressSummary) {
+    els.summaryWorstStress.textContent = latestResult.summary.worstStressName;
+    els.summaryWorstStressDesc.textContent = `Lowest ending portfolio across the deterministic stress paths: ${formatCurrency(
+      useReal ? latestResult.summary.worstStressTerminalReal : latestResult.summary.worstStressTerminalNominal
+    )}.`;
+  } else {
+    els.summaryWorstStress.textContent = "Removed";
+    els.summaryWorstStressDesc.textContent = "Deterministic stress scenarios are no longer shown in the UI.";
+  }
+
+  const runway = latestResult.summary?.cashRunwayYears;
   els.summaryCashRunway.textContent =
-    runway === Number.POSITIVE_INFINITY ? "No draw" : `${formatYears(runway)}`;
+    runway === Number.POSITIVE_INFINITY ? "No draw" : formatYears(runway);
 }
 
 function renderCharts() {
   renderPortfolioChart();
   renderSpendingChart();
-  renderStressChart();
 }
 
 function renderPortfolioChart() {
   const useReal = els.showRealValues.checked;
-  const mc = useReal ? latestResult.monteCarlo.realPercentiles : latestResult.monteCarlo.nominalPercentiles;
+  const percentileSeries = useReal
+    ? latestResult.monteCarlo.realPercentiles
+    : latestResult.monteCarlo.nominalPercentiles;
   const basePath = useReal ? latestResult.baseCase.pathReal : latestResult.baseCase.pathNominal;
   const labels = buildYearLabels(latestResult.inputs.years);
 
   drawLineChart(els.portfolioChart, {
     labels,
     band: {
-      lower: mc.p10,
-      upper: mc.p90,
+      lower: percentileSeries.p10,
+      upper: percentileSeries.p90,
       fillStyle: "rgba(45, 91, 255, 0.15)"
     },
     lines: [
       {
         label: "Median Monte Carlo",
-        values: mc.p50,
+        values: percentileSeries.p50,
         color: "#2d5bff",
         width: 3
       },
@@ -339,42 +336,24 @@ function renderSpendingChart() {
   });
 }
 
-function renderStressChart() {
-  const useReal = els.showRealValues.checked;
-  const labels = buildYearLabels(latestResult.inputs.years);
-
-  drawLineChart(els.stressChart, {
-    labels,
-    lines: latestResult.stressTests.map((scenario, index) => ({
-      label: scenario.name,
-      values: useReal ? scenario.pathReal : scenario.pathNominal,
-      color: stressColour(index),
-      width: index === 0 ? 2.5 : 2
-    })),
-    yFormatter: formatCurrency
-  });
-}
-
 function renderTable() {
+  if (!els.resultsTable || !latestResult?.baseCase?.rows) return;
+
   const useReal = els.showRealValues.checked;
   const rows = latestResult.baseCase.rows;
   const thead = els.resultsTable.querySelector("thead");
   const tbody = els.resultsTable.querySelector("tbody");
 
-  const headers = [
-    "Year",
-    "Age 1",
-    "Age 2",
-    "Start portfolio",
-    "Household spending",
-    "State pension",
-    "Portfolio withdrawal",
-    "End portfolio"
-  ];
-
   thead.innerHTML = `
     <tr>
-      ${headers.map((header) => `<th>${header}</th>`).join("")}
+      <th>Year</th>
+      <th>Age 1</th>
+      <th>Age 2</th>
+      <th>Start portfolio</th>
+      <th>Household spending</th>
+      <th>State pension</th>
+      <th>Portfolio withdrawal</th>
+      <th>End portfolio</th>
     </tr>
   `;
 
@@ -423,15 +402,15 @@ function parseLooseInteger(value) {
   return Number.isFinite(numeric) ? Math.trunc(numeric) : NaN;
 }
 
-function formatInputNumber(value) {
+function unformatNumberString(value) {
+  return String(value ?? "").replace(/,/g, "");
+}
+
+function formatInteger(value) {
   if (!Number.isFinite(value)) return "";
   return new Intl.NumberFormat("en-GB", {
     maximumFractionDigits: 0
   }).format(value);
-}
-
-function unformatNumberString(value) {
-  return String(value ?? "").replace(/,/g, "");
 }
 
 function formatCurrency(value) {
@@ -457,22 +436,12 @@ function buildYearLabels(years) {
   return Array.from({ length: years + 1 }, (_, index) => index);
 }
 
-function stressColour(index) {
-  const palette = [
-    "#2d5bff",
-    "#0f766e",
-    "#dc2626",
-    "#d97706",
-    "#6d28d9",
-    "#0f172a",
-    "#0891b2",
-    "#be185d"
-  ];
-  return palette[index % palette.length];
-}
-
 function drawLineChart(canvas, config) {
+  if (!canvas) return;
+
   const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
   const width = Math.max(320, Math.floor(rect.width));
@@ -487,16 +456,18 @@ function drawLineChart(canvas, config) {
   const plotWidth = width - padding.left - padding.right;
   const plotHeight = height - padding.top - padding.bottom;
 
-  const allSeriesValues = [];
+  const allValues = [];
+
   if (config.band) {
-    allSeriesValues.push(...config.band.lower, ...config.band.upper);
-  }
-  for (const line of config.lines) {
-    allSeriesValues.push(...line.values);
+    allValues.push(...config.band.lower, ...config.band.upper);
   }
 
+  config.lines.forEach((line) => {
+    allValues.push(...line.values);
+  });
+
   const minY = 0;
-  const maxY = niceMax(Math.max(...allSeriesValues, 1));
+  const maxY = niceMax(Math.max(...allValues, 1));
 
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, width, height);
@@ -511,12 +482,11 @@ function drawLineChart(canvas, config) {
       top: padding.top,
       minY,
       maxY,
-      stroke: "rgba(45, 91, 255, 0.0)",
       fill: config.band.fillStyle
     });
   }
 
-  for (const line of config.lines) {
+  config.lines.forEach((line) => {
     drawSeries(ctx, line.values, {
       width: plotWidth,
       height: plotHeight,
@@ -527,7 +497,7 @@ function drawLineChart(canvas, config) {
       color: line.color,
       lineWidth: line.width || 2
     });
-  }
+  });
 
   drawXAxis(ctx, config.labels, width, height, padding);
   drawLegend(ctx, config.lines, width, height);
@@ -575,8 +545,11 @@ function drawBand(ctx, lower, upper, opts) {
   for (let i = 0; i < upper.length; i += 1) {
     const x = opts.left + (i / (count - 1)) * opts.width;
     const y = scaleY(upper[i], opts.minY, opts.maxY, opts.top, opts.height);
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
+    if (i === 0) {
+      ctx.moveTo(x, y);
+    } else {
+      ctx.lineTo(x, y);
+    }
   }
 
   for (let i = lower.length - 1; i >= 0; i -= 1) {
@@ -594,12 +567,16 @@ function drawSeries(ctx, values, opts) {
   if (!values || values.length < 2) return;
 
   ctx.beginPath();
+
   values.forEach((value, index) => {
     const x = opts.left + (index / (values.length - 1)) * opts.width;
     const y = scaleY(value, opts.minY, opts.maxY, opts.top, opts.height);
 
-    if (index === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
+    if (index === 0) {
+      ctx.moveTo(x, y);
+    } else {
+      ctx.lineTo(x, y);
+    }
   });
 
   ctx.strokeStyle = opts.color;
@@ -668,7 +645,10 @@ function drawLegend(ctx, lines, width, height) {
 }
 
 function scaleY(value, minY, maxY, top, height) {
-  if (maxY === minY) return top + height / 2;
+  if (maxY === minY) {
+    return top + height / 2;
+  }
+
   const ratio = (value - minY) / (maxY - minY);
   return top + height - ratio * height;
 }
@@ -681,6 +661,7 @@ function niceMax(value) {
 
 function debounce(fn, wait) {
   let timeoutId = null;
+
   return (...args) => {
     window.clearTimeout(timeoutId);
     timeoutId = window.setTimeout(() => fn(...args), wait);
