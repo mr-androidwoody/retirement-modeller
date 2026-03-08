@@ -1,7 +1,8 @@
 import {
   getDefaultInputs,
-  runRetirementSimulation,
-  validateInputs
+  validateInputs,
+  buildStressTests,
+  getDerivedDisplayData
 } from "./simulator.js";
 
 const FIELD_IDS = [
@@ -29,7 +30,8 @@ const FIELD_IDS = [
   "person1PensionAmount",
   "person2Age",
   "person2PensionAge",
-  "person2PensionAmount"
+  "person2PensionAmount",
+  "randomSeed"
 ];
 
 const FORMATTED_NUMBER_IDS = [
@@ -37,22 +39,15 @@ const FORMATTED_NUMBER_IDS = [
   "initialPortfolio",
   "initialSpending",
   "person1PensionAmount",
-  "person2PensionAmount"
-];
-
-const toggleIds = [
-  "skipInflationAfterNegative",
-  "showRealValues",
-  "showFullTable"
+  "person2PensionAmount",
+  "randomSeed"
 ];
 
 let portfolioChart = null;
 let spendingChart = null;
 let stressChart = null;
-let simWorker = null;
-let currentRequestId = 0;
-
-const runButtonDefaultLabel = "Run simulation";
+let worker = null;
+let latestStressTests = null;
 
 document.addEventListener("DOMContentLoaded", () => {
   applyDefaults();
@@ -69,38 +64,15 @@ function wireEvents() {
 
   for (const id of FIELD_IDS) {
     const el = document.getElementById(id);
+    if (!el) continue;
     el.addEventListener("input", handleLiveUiState);
     el.addEventListener("change", handleLiveUiState);
   }
 
-  for (const id of toggleIds) {
-    document.getElementById(id).addEventListener("change", () => {
-      if (id === "showFullTable") {
-        toggleTableVisibility();
-      }
-      if (id === "showRealValues") {
-        runSimulation();
-      }
-    });
-  }
+  document.getElementById("showFullTable").addEventListener("change", toggleTableVisibility);
+  document.getElementById("showRealValues").addEventListener("change", rerenderFromLastResult);
 
   bindFormattedNumberInputs();
-}
-
-function bindFormattedNumberInputs() {
-  for (const id of FORMATTED_NUMBER_IDS) {
-    const input = document.getElementById(id);
-
-    input.addEventListener("focus", () => {
-      input.value = stripCommas(input.value);
-    });
-
-    input.addEventListener("blur", () => {
-      const value = parseLooseNumber(input.value);
-      input.value = value === 0 && input.value.trim() === "" ? "" : formatWholeNumber(value);
-      handleLiveUiState();
-    });
-  }
 }
 
 function applyDefaults() {
@@ -132,17 +104,41 @@ function applyDefaults() {
   setValue("person1Age", defaults.person1Age);
   setValue("person1PensionAge", defaults.person1PensionAge);
   setValue("person1PensionAmount", formatWholeNumber(defaults.person1PensionAmount));
-
   setValue("person2Age", defaults.person2Age);
   setValue("person2PensionAge", defaults.person2PensionAge);
   setValue("person2PensionAmount", formatWholeNumber(defaults.person2PensionAmount));
+  setValue("randomSeed", "");
 
   document.getElementById("skipInflationAfterNegative").checked = true;
   document.getElementById("showRealValues").checked = true;
   document.getElementById("showFullTable").checked = true;
 
+  latestStressTests = null;
   handleLiveUiState();
   toggleTableVisibility();
+}
+
+function bindFormattedNumberInputs() {
+  for (const id of FORMATTED_NUMBER_IDS) {
+    const input = document.getElementById(id);
+    if (!input) continue;
+
+    input.addEventListener("focus", () => {
+      input.value = stripCommas(input.value);
+    });
+
+    input.addEventListener("blur", () => {
+      const raw = String(input.value ?? "").trim();
+      if (raw === "") {
+        input.value = "";
+        handleLiveUiState();
+        return;
+      }
+      const value = parseLooseNumber(raw);
+      input.value = formatWholeNumber(value);
+      handleLiveUiState();
+    });
+  }
 }
 
 function handleLiveUiState() {
@@ -153,94 +149,12 @@ function handleLiveUiState() {
 
   const totalEl = document.getElementById("allocationTotal");
   totalEl.textContent = `Allocation total: ${formatNumber(total, 0)}%`;
-
-  if (Math.abs(total - 100) < 0.001) {
-    totalEl.className = "allocation-total positive";
-  } else {
-    totalEl.className = "allocation-total negative";
-  }
-}
-
-function runSimulation() {
-  const inputs = collectInputs();
-  const errors = validateInputs(inputs);
-
-  renderValidation(errors);
-  toggleTableVisibility();
-
-  if (errors.length > 0) {
-    clearCharts();
-    clearSummary();
-    clearTable();
-    setBusyState(false);
-    return;
-  }
-
-  currentRequestId += 1;
-  const requestId = currentRequestId;
-
-  setBusyState(true);
-
-  const worker = getWorker();
-  worker.postMessage({
-    type: "run-simulation",
-    requestId,
-    inputs
-  });
-}
-
-function getWorker() {
-  if (simWorker) return simWorker;
-
-  simWorker = new Worker("./worker.js", { type: "module" });
-
-  simWorker.addEventListener("message", (event) => {
-    const { type, requestId, result, errors } = event.data || {};
-
-    if (requestId !== currentRequestId) {
-      return;
-    }
-
-    if (type === "simulation-result") {
-      setBusyState(false);
-      renderValidation([]);
-      renderSummary(result);
-      renderCharts(result);
-      renderTable(result);
-      return;
-    }
-
-    if (type === "simulation-error") {
-      setBusyState(false);
-      renderValidation([errors || "Simulation failed."]);
-      clearCharts();
-      clearSummary();
-      clearTable();
-    }
-  });
-
-  simWorker.addEventListener("error", () => {
-    setBusyState(false);
-    renderValidation(["Simulation worker failed."]);
-    clearCharts();
-    clearSummary();
-    clearTable();
-  });
-
-  return simWorker;
-}
-
-function setBusyState(isBusy) {
-  const runBtn = document.getElementById("runSimulationBtn");
-  const resetBtn = document.getElementById("resetDefaultsBtn");
-
-  runBtn.disabled = isBusy;
-  resetBtn.disabled = isBusy;
-
-  runBtn.textContent = isBusy ? "Running…" : runButtonDefaultLabel;
+  totalEl.classList.remove("positive", "negative");
+  totalEl.classList.add(Math.abs(total - 100) < 0.001 ? "positive" : "negative");
 }
 
 function collectInputs() {
+  const seedRaw = String(document.getElementById("randomSeed").value ?? "").trim();
   return {
     years: readNumber("years"),
     simulationRuns: readNumber("simulationRuns"),
@@ -272,61 +186,94 @@ function collectInputs() {
     person2PensionAge: readNumber("person2PensionAge"),
     person2PensionAmount: readNumber("person2PensionAmount"),
 
-    skipInflationAfterNegative:
-      document.getElementById("skipInflationAfterNegative").checked
+    skipInflationAfterNegative: document.getElementById("skipInflationAfterNegative").checked,
+    seed: seedRaw === "" ? null : parseLooseNumber(seedRaw)
   };
 }
 
-function renderValidation(errors) {
-  const banner = document.getElementById("validationBanner");
+function runSimulation() {
+  const inputs = collectInputs();
+  const errors = validateInputs(inputs);
 
-  if (!errors.length) {
-    banner.classList.add("hidden");
-    banner.textContent = "";
+  renderValidation(errors);
+  toggleTableVisibility();
+
+  if (errors.length > 0) {
+    clearCharts();
+    clearSummary();
+    clearTable();
+    latestStressTests = null;
     return;
   }
 
-  banner.classList.remove("hidden");
-  banner.textContent = errors.join(" ");
+  setRunning(true);
+
+  if (worker) {
+    worker.terminate();
+    worker = null;
+  }
+
+  worker = new Worker("./worker.js", { type: "module" });
+  worker.onmessage = (event) => {
+    const { ok, result, error } = event.data;
+    setRunning(false);
+
+    if (!ok) {
+      renderValidation([error || "Simulation failed."]);
+      clearCharts();
+      clearSummary();
+      clearTable();
+      return;
+    }
+
+    latestStressTests = result.stressTests;
+    renderValidation([]);
+    renderResult(result);
+  };
+
+  worker.onerror = () => {
+    setRunning(false);
+    renderValidation(["Worker failed while running the simulation."]);
+    clearCharts();
+    clearSummary();
+    clearTable();
+  };
+
+  worker.postMessage({ type: "run", inputs });
+}
+
+function rerenderFromLastResult() {
+  if (!latestStressTests) return;
+  runSimulation();
+}
+
+function renderResult(result) {
+  renderSummary(result);
+  renderCharts(result);
+  renderTable(result);
 }
 
 function renderSummary(result) {
   const realValues = document.getElementById("showRealValues").checked;
-  const medianEnding = result.medianPath.yearly[result.medianPath.yearly.length - 1];
+  const medianEnding = result.medianPath[result.medianPath.length - 1];
   const worst = result.worstStress;
+  const endValue = realValues ? medianEnding.endPortfolioReal : medianEnding.endPortfolio;
+  const worstValue = realValues ? worst.endingPortfolioReal : worst.endingPortfolio;
 
-  document.getElementById("successRateValue").textContent = formatPercent(
-    result.successRate,
-    1
-  );
-
-  document.getElementById("medianEndingValue").textContent = realValues
-    ? formatCurrency(medianEnding.endPortfolioReal)
-    : formatCurrency(medianEnding.endPortfolio);
-
-  document.getElementById("worstStressValue").textContent = worst
-    ? `${worst.name}: ${formatCurrency(
-        realValues ? worst.endingPortfolioReal : worst.endingPortfolio
-      )}`
-    : "—";
-
-  document.getElementById("worstStressNote").textContent = worst
-    ? worst.depleted
-      ? "This stress path depleted before the end of the plan."
-      : "This was the weakest non-random stress result."
-    : "—";
-
-  document.getElementById("cashRunwayValue").textContent = `${formatNumber(
-    result.cashRunwayYears,
-    1
-  )} yrs`;
+  document.getElementById("successRateValue").textContent = formatPercent(result.successRate, 1);
+  document.getElementById("medianEndingValue").textContent = formatCurrency(endValue);
+  document.getElementById("worstStressValue").textContent = `${worst.name}: ${formatCurrency(worstValue)}`;
+  document.getElementById("worstStressNote").textContent = worst.depleted
+    ? "This scenario depletes before the end of the plan."
+    : "Weakest non-random stress result.";
+  document.getElementById("cashRunwayValue").textContent = `${formatNumber(result.cashRunwayYears, 1)} yrs`;
 }
 
 function clearSummary() {
   document.getElementById("successRateValue").textContent = "—";
   document.getElementById("medianEndingValue").textContent = "—";
   document.getElementById("worstStressValue").textContent = "—";
-  document.getElementById("worstStressNote").textContent = "—";
+  document.getElementById("worstStressNote").textContent = "Weakest non-random stress result.";
   document.getElementById("cashRunwayValue").textContent = "—";
 }
 
@@ -355,31 +302,19 @@ function renderCharts(result) {
 }
 
 function clearCharts() {
-  if (portfolioChart) {
-    portfolioChart.destroy();
-    portfolioChart = null;
+  for (const chart of [portfolioChart, spendingChart, stressChart]) {
+    if (chart) chart.destroy();
   }
-  if (spendingChart) {
-    spendingChart.destroy();
-    spendingChart = null;
-  }
-  if (stressChart) {
-    stressChart.destroy();
-    stressChart = null;
-  }
+  portfolioChart = null;
+  spendingChart = null;
+  stressChart = null;
 }
 
 function buildPortfolioChartData(result, realValues) {
   const labels = result.percentiles.portfolio.map((row) => row.year);
-  const upper = result.percentiles.portfolio.map((row) =>
-    realValues ? row.real.p90 : row.nominal.p90
-  );
-  const median = result.percentiles.portfolio.map((row) =>
-    realValues ? row.real.p50 : row.nominal.p50
-  );
-  const lower = result.percentiles.portfolio.map((row) =>
-    realValues ? row.real.p10 : row.nominal.p10
-  );
+  const upper = result.percentiles.portfolio.map((row) => realValues ? row.real.p90 : row.nominal.p90);
+  const median = result.percentiles.portfolio.map((row) => realValues ? row.real.p50 : row.nominal.p50);
+  const lower = result.percentiles.portfolio.map((row) => realValues ? row.real.p10 : row.nominal.p10);
 
   return {
     labels,
@@ -434,19 +369,15 @@ function buildSpendingChartData(result, realValues) {
   const spendingMedian = result.percentiles.spending.map((row) =>
     realValues ? row.spendingReal.p50 : row.spendingNominal.p50
   );
-
   const spendingP90 = result.percentiles.spending.map((row) =>
     realValues ? row.spendingReal.p90 : row.spendingNominal.p90
   );
-
   const spendingP10 = result.percentiles.spending.map((row) =>
     realValues ? row.spendingReal.p10 : row.spendingNominal.p10
   );
-
   const withdrawalMedian = result.percentiles.spending.map((row) =>
     realValues ? row.withdrawalReal.p50 : row.withdrawalNominal.p50
   );
-
   const pensionMedian = result.percentiles.spending.map((row) =>
     realValues ? row.pensionReal.p50 : row.pensionNominal.p50
   );
@@ -510,23 +441,11 @@ function buildSpendingChartData(result, realValues) {
 
 function buildStressChartData(result, realValues) {
   const labels = result.stressTests[0]?.yearly.map((row) => row.year) ?? [];
-
-  const palette = [
-    "#2c5cc5",
-    "#d2364e",
-    "#13895a",
-    "#9a5de0",
-    "#c97a10",
-    "#547089",
-    "#0f6379",
-    "#7b3340"
-  ];
+  const palette = ["#2c5cc5", "#d2364e", "#13895a", "#9a5de0", "#c97a10", "#547089", "#0f6379", "#7b3340"];
 
   const datasets = result.stressTests.map((scenario, index) => ({
     label: scenario.name,
-    data: scenario.yearly.map((row) =>
-      realValues ? row.endPortfolioReal : row.endPortfolio
-    ),
+    data: scenario.yearly.map((row) => realValues ? row.endPortfolioReal : row.endPortfolio),
     borderColor: palette[index % palette.length],
     backgroundColor: palette[index % palette.length],
     pointRadius: 0,
@@ -544,10 +463,7 @@ function buildLineChartOptions() {
     maintainAspectRatio: false,
     animation: false,
     normalized: true,
-    interaction: {
-      mode: "index",
-      intersect: false
-    },
+    interaction: { mode: "index", intersect: false },
     plugins: {
       legend: {
         position: "top",
@@ -571,31 +487,21 @@ function buildLineChartOptions() {
     },
     scales: {
       x: {
-        grid: {
-          color: "rgba(148, 163, 184, 0.14)"
-        },
-        ticks: {
-          color: "#64748b"
-        },
+        grid: { color: "rgba(148, 163, 184, 0.14)" },
+        ticks: { color: "#64748b" },
         title: {
           display: true,
           text: "Year",
           color: "#64748b",
-          font: {
-            weight: "600"
-          }
+          font: { weight: "600" }
         }
       },
       y: {
         beginAtZero: true,
-        grid: {
-          color: "rgba(148, 163, 184, 0.18)"
-        },
+        grid: { color: "rgba(148, 163, 184, 0.18)" },
         ticks: {
           color: "#64748b",
-          callback(value) {
-            return compactCurrency(value);
-          }
+          callback(value) { return compactCurrency(value); }
         }
       }
     }
@@ -607,8 +513,7 @@ function renderTable(result) {
   const table = document.getElementById("resultsTable");
   const thead = table.querySelector("thead");
   const tbody = table.querySelector("tbody");
-
-  const rows = result.medianPath.yearly;
+  const rows = result.medianPath;
 
   thead.innerHTML = `
     <tr>
@@ -620,49 +525,33 @@ function renderTable(result) {
       <th>Portfolio return</th>
       <th>Equity return</th>
       <th>Bond return</th>
-      <th>Cash return</th>
+      <th>Cashlike return</th>
       <th>End portfolio</th>
     </tr>
   `;
 
-  tbody.innerHTML = rows
-    .map((row) => {
-      const startPortfolio = realValues ? row.startPortfolioReal : row.startPortfolio;
-      const spending = realValues ? row.spendingReal : row.spendingNominal;
-      const pension = realValues ? row.statePensionReal : row.statePensionNominal;
-      const withdrawal = realValues
-        ? row.portfolioWithdrawalReal
-        : row.portfolioWithdrawalNominal;
-      const endPortfolio = realValues ? row.endPortfolioReal : row.endPortfolio;
+  tbody.innerHTML = rows.map((row) => {
+    const startPortfolio = realValues ? row.startPortfolioReal : row.startPortfolio;
+    const spending = realValues ? row.spendingReal : row.spendingNominal;
+    const pension = realValues ? row.statePensionReal : row.statePensionNominal;
+    const withdrawal = realValues ? row.portfolioWithdrawalReal : row.portfolioWithdrawalNominal;
+    const endPortfolio = realValues ? row.endPortfolioReal : row.endPortfolio;
 
-      return `
-        <tr>
-          <td>${row.year}</td>
-          <td>${formatCurrency(startPortfolio)}</td>
-          <td>${formatCurrency(spending)}</td>
-          <td>${formatCurrency(pension)}</td>
-          <td>${formatCurrency(withdrawal)}</td>
-          <td class="${row.portfolioReturn < 0 ? "negative" : "positive"}">${formatPercent(
-            row.portfolioReturn,
-            1
-          )}</td>
-          <td class="${row.equityReturn < 0 ? "negative" : "positive"}">${formatPercent(
-            row.equityReturn,
-            1
-          )}</td>
-          <td class="${row.bondReturn < 0 ? "negative" : "positive"}">${formatPercent(
-            row.bondReturn,
-            1
-          )}</td>
-          <td class="${row.cashReturn < 0 ? "negative" : "positive"}">${formatPercent(
-            row.cashReturn,
-            1
-          )}</td>
-          <td>${formatCurrency(endPortfolio)}</td>
-        </tr>
-      `;
-    })
-    .join("");
+    return `
+      <tr>
+        <td>${row.year}</td>
+        <td>${formatCurrency(startPortfolio)}</td>
+        <td>${formatCurrency(spending)}</td>
+        <td>${formatCurrency(pension)}</td>
+        <td>${formatCurrency(withdrawal)}</td>
+        <td class="${row.portfolioReturn < 0 ? "negative" : "positive"}">${formatPercent(row.portfolioReturn, 1)}</td>
+        <td class="${row.equityReturn < 0 ? "negative" : "positive"}">${formatPercent(row.equityReturn, 1)}</td>
+        <td class="${row.bondReturn < 0 ? "negative" : "positive"}">${formatPercent(row.bondReturn, 1)}</td>
+        <td class="${row.cashReturn < 0 ? "negative" : "positive"}">${formatPercent(row.cashReturn, 1)}</td>
+        <td>${formatCurrency(endPortfolio)}</td>
+      </tr>
+    `;
+  }).join("");
 }
 
 function clearTable() {
@@ -676,13 +565,31 @@ function toggleTableVisibility() {
   document.getElementById("yearlyTableCard").classList.toggle("hidden", !show);
 }
 
+function renderValidation(errors) {
+  const banner = document.getElementById("validationBanner");
+  if (!errors.length) {
+    banner.classList.add("hidden");
+    banner.textContent = "";
+    return;
+  }
+  banner.classList.remove("hidden");
+  banner.textContent = errors.join(" ");
+}
+
+function setRunning(isRunning) {
+  const el = document.getElementById("runStatus");
+  el.classList.toggle("hidden", !isRunning);
+  el.textContent = isRunning ? "Running Monte Carlo…" : "";
+}
+
 function setValue(id, value) {
-  document.getElementById(id).value = value;
+  const el = document.getElementById(id);
+  if (el) el.value = value;
 }
 
 function readNumber(id) {
-  const raw = document.getElementById(id).value;
-  return parseLooseNumber(raw);
+  const el = document.getElementById(id);
+  return parseLooseNumber(el ? el.value : 0);
 }
 
 function parseLooseNumber(value) {
@@ -691,10 +598,7 @@ function parseLooseNumber(value) {
     .replace(/[^\d.-]/g, "")
     .trim();
 
-  if (cleaned === "" || cleaned === "-" || cleaned === "." || cleaned === "-.") {
-    return 0;
-  }
-
+  if (cleaned === "" || cleaned === "-" || cleaned === "." || cleaned === "-.") return 0;
   const parsed = Number(cleaned);
   return Number.isFinite(parsed) ? parsed : 0;
 }
@@ -704,9 +608,7 @@ function stripCommas(value) {
 }
 
 function formatWholeNumber(value) {
-  return new Intl.NumberFormat("en-GB", {
-    maximumFractionDigits: 0
-  }).format(Number(value) || 0);
+  return new Intl.NumberFormat("en-GB", { maximumFractionDigits: 0 }).format(Number(value) || 0);
 }
 
 function formatCurrency(value) {

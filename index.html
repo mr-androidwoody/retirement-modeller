@@ -17,117 +17,74 @@
     <header class="page-header">
       <div class="page-title-wrap">
         <h1>Retirement Simulator</h1>
-        <p>Monte Carlo testing with Guyton-Klinger guardrails and state pension offsets</p>
-      </div>
-
-      <div class="top-controls">
-        <label class="toggle-pill">
-          <input type="checkbox" id="skipInflationAfterNegative" checked />
-          <span>Skip inflation increase after a negative market year</span>
-        </label>
-
-        <label class="toggle-pill compact">
-          <input type="checkbox" id="showRealValues" checked />
-          <span>Show real values</span>
-        </label>
-
-        <label class="toggle-pill compact">
-          <input type="checkbox" id="showFullTable" checked />
-          <span>Show full yearly table</span>
-        </label>
-
-        <button id="runSimulationBtn" class="btn btn-primary">Run simulation</button>
-        <button id="resetDefaultsBtn" class="btn btn-secondary">Reset defaults</button>
+        <p class="intro-copy">
+          Plan assessment. Monte Carlo results are shown alongside deterministic stress paths so you can see both probability and vulnerability.
+        </p>
+        <div class="context-chips">
+          <span class="chip"><span class="chip-label">Spending rule</span><strong>Guyton-Klinger</strong></span>
+          <span class="chip"><span class="chip-label">Income offset</span><strong>State pension</strong></span>
+          <span class="chip"><span class="chip-label">Stress path set</span><strong>8 scenarios</strong></span>
+        </div>
       </div>
     </header>
 
-    <section class="hero-banner">
-      <div class="hero-copy">
-        <div class="eyebrow">Plan assessment</div>
-        <h2>Professional retirement planner view</h2>
-        <p>
-          Monte Carlo results are shown alongside deterministic stress paths so you can
-          see both probability and vulnerability.
-        </p>
-      </div>
-
-      <div class="hero-badges">
-        <div class="hero-badge">
-          <span>Spending rule</span>
-          <strong>Guyton-Klinger</strong>
-        </div>
-        <div class="hero-badge">
-          <span>Income offset</span>
-          <strong>State pension</strong>
-        </div>
-        <div class="hero-badge">
-          <span>Stress path set</span>
-          <strong>8 scenarios</strong>
-        </div>
-      </div>
-    </section>
-
-    <section class="summary-grid" id="summaryGrid">
-      <article class="summary-card">
-        <div class="summary-head">
-          <div class="summary-label">Monte Carlo success rate</div>
-          <button
-            type="button"
-            class="info-dot"
-            aria-label="Runs that do not deplete before the selected end year"
-            title="Runs that do not deplete before the selected end year"
-          >i</button>
-        </div>
-        <div class="summary-value" id="successRateValue">—</div>
+    <section class="summary-band">
+      <article class="metric-card">
+        <div class="metric-label">Monte Carlo success rate</div>
+        <div class="metric-value" id="successRateValue">—</div>
+        <div class="metric-note">Runs that do not deplete before the selected end year.</div>
       </article>
 
-      <article class="summary-card">
-        <div class="summary-head">
-          <div class="summary-label">Median end portfolio</div>
-          <button
-            type="button"
-            class="info-dot"
-            aria-label="50th percentile ending value in selected display terms"
-            title="50th percentile ending value in selected display terms"
-          >i</button>
-        </div>
-        <div class="summary-value" id="medianEndingValue">—</div>
+      <article class="metric-card">
+        <div class="metric-label">Median end portfolio</div>
+        <div class="metric-value" id="medianEndingValue">—</div>
+        <div class="metric-note">50th percentile ending value in selected display terms.</div>
       </article>
 
-      <article class="summary-card">
-        <div class="summary-head">
-          <div class="summary-label">Worst stress scenario</div>
-          <button
-            type="button"
-            class="info-dot"
-            aria-label="Stagnation: This was the weakest non-random stress result."
-            title="Stagnation: This was the weakest non-random stress result."
-          >i</button>
-        </div>
-        <div class="summary-value" id="worstStressValue">—</div>
-        <div class="summary-note" id="worstStressNote">—</div>
+      <article class="metric-card">
+        <div class="metric-label">Worst stress scenario</div>
+        <div class="metric-value" id="worstStressValue">—</div>
+        <div class="metric-note" id="worstStressNote">Weakest non-random stress result.</div>
       </article>
 
-      <article class="summary-card">
-        <div class="summary-head">
-          <div class="summary-label">Cash runway at start</div>
-          <button
-            type="button"
-            class="info-dot"
-            aria-label="Years of spending covered by cash / QMMF at outset"
-            title="Years of spending covered by cash / QMMF at outset"
-          >i</button>
-        </div>
-        <div class="summary-value" id="cashRunwayValue">—</div>
+      <article class="metric-card">
+        <div class="metric-label">Cash runway at start</div>
+        <div class="metric-value" id="cashRunwayValue">—</div>
+        <div class="metric-note">Years of spending covered by cash / QMMF at outset.</div>
       </article>
     </section>
 
-    <div class="validation-banner hidden" id="validationBanner"></div>
+    <section class="controls-row">
+      <label class="toggle-pill" title="If enabled, spending does not get an inflation increase after a negative portfolio-return year.">
+        <input type="checkbox" id="skipInflationAfterNegative" checked />
+        <span>Skip inflation increase after a negative market year</span>
+      </label>
+
+      <label class="toggle-pill" title="Show values in today's money rather than nominal future pounds.">
+        <input type="checkbox" id="showRealValues" checked />
+        <span>Show real values</span>
+      </label>
+
+      <label class="toggle-pill" title="Show the full yearly median-path output table.">
+        <input type="checkbox" id="showFullTable" checked />
+        <span>Show full yearly table</span>
+      </label>
+
+      <div class="controls-actions">
+        <button id="runSimulationBtn" class="btn btn-primary">Run simulation</button>
+        <button id="resetDefaultsBtn" class="btn btn-secondary">Reset defaults</button>
+      </div>
+    </section>
+
+    <div class="status-row">
+      <div class="status-pill hidden" id="runStatus">Running Monte Carlo…</div>
+      <div class="validation-banner hidden" id="validationBanner"></div>
+    </div>
 
     <main class="main-layout">
       <aside class="input-panel">
         <div class="panel-section">
-          <h3>Plan inputs</h3>
+          <h2>Plan inputs</h2>
 
           <div class="field-grid">
             <label class="field">
@@ -135,8 +92,8 @@
               <input id="years" type="number" min="1" max="60" step="1" />
             </label>
 
-            <label class="field">
-              <span>Monte Carlo runs</span>
+            <label class="field" title="Number of random simulations. Higher numbers smooth the probability estimate but take longer to run.">
+              <span>Monte Carlo runs <span class="help">?</span></span>
               <input id="simulationRuns" type="text" inputmode="numeric" />
             </label>
 
@@ -155,8 +112,8 @@
               <input id="inflationRate" type="number" step="0.1" />
             </label>
 
-            <label class="field">
-              <span>Annual rebalance to target</span>
+            <label class="field" title="If enabled, the portfolio is reset each year to the target equity, bond and cashlike weights.">
+              <span>Annual rebalance to target <span class="help">?</span></span>
               <select id="rebalanceAnnually">
                 <option value="true">Yes</option>
                 <option value="false">No</option>
@@ -166,7 +123,10 @@
         </div>
 
         <div class="panel-section">
-          <h3>Portfolio mix</h3>
+          <div class="section-heading">
+            <h3>Portfolio mix</h3>
+            <div class="allocation-total" id="allocationTotal">Allocation total: —</div>
+          </div>
 
           <div class="allocation-grid">
             <label class="field">
@@ -179,13 +139,11 @@
               <input id="bondAllocation" type="number" min="0" max="100" step="1" />
             </label>
 
-            <label class="field">
-              <span>Cash / QMMF (%)</span>
+            <label class="field" title="Cashlike assets include cash savings, money-market funds and QMMF holdings used as a drawdown buffer.">
+              <span>Cashlike (%) <span class="help">?</span></span>
               <input id="cashAllocation" type="number" min="0" max="100" step="1" />
             </label>
           </div>
-
-          <div class="allocation-total" id="allocationTotal">Allocation total: —</div>
         </div>
 
         <div class="panel-section">
@@ -212,20 +170,20 @@
               <input id="bondVolatility" type="number" step="0.1" />
             </label>
 
-            <label class="field">
-              <span>Cash / QMMF return (%)</span>
+            <label class="field" title="Expected annual return for cashlike holdings such as QMMF.">
+              <span>Cashlike return (%) <span class="help">?</span></span>
               <input id="cashReturn" type="number" step="0.1" />
             </label>
 
-            <label class="field">
-              <span>Cash / QMMF volatility (%)</span>
+            <label class="field" title="Expected annual volatility for cashlike holdings. Usually low relative to equities and bonds.">
+              <span>Cashlike volatility (%) <span class="help">?</span></span>
               <input id="cashVolatility" type="number" step="0.1" />
             </label>
           </div>
         </div>
 
         <div class="panel-section">
-          <h3>Guyton-Klinger guardrails</h3>
+          <h3 title="A spending rule that adjusts withdrawals when the implied withdrawal rate moves outside selected guardrails.">Guyton-Klinger guardrails <span class="help">?</span></h3>
 
           <div class="field-grid">
             <label class="field">
@@ -233,18 +191,18 @@
               <input id="initialWithdrawalRate" type="number" step="0.1" />
             </label>
 
-            <label class="field">
-              <span>Upper guardrail (%)</span>
+            <label class="field" title="If the current withdrawal rate rises above this threshold versus the starting rate, spending is cut by the adjustment size.">
+              <span>Upper guardrail (%) <span class="help">?</span></span>
               <input id="upperGuardrail" type="number" step="1" />
             </label>
 
-            <label class="field">
-              <span>Lower guardrail (%)</span>
+            <label class="field" title="If the current withdrawal rate falls below this threshold versus the starting rate, spending is raised by the adjustment size.">
+              <span>Lower guardrail (%) <span class="help">?</span></span>
               <input id="lowerGuardrail" type="number" step="1" />
             </label>
 
-            <label class="field">
-              <span>Adjustment size (%)</span>
+            <label class="field" title="The percentage amount by which portfolio withdrawals are increased or reduced when a guardrail is hit.">
+              <span>Adjustment size (%) <span class="help">?</span></span>
               <input id="adjustmentPct" type="number" step="1" />
             </label>
           </div>
@@ -285,9 +243,28 @@
             </label>
           </div>
         </div>
+
+        <div class="panel-section">
+          <details class="advanced-box">
+            <summary>Advanced settings</summary>
+            <div class="field-grid advanced-grid">
+              <label class="field" title="Optional random seed for reproducible Monte Carlo runs. Leave blank for a new sequence each time.">
+                <span>Seed input <span class="help">?</span></span>
+                <input id="randomSeed" type="text" inputmode="numeric" placeholder="Auto" />
+              </label>
+            </div>
+          </details>
+        </div>
       </aside>
 
       <section class="content-column">
+        <article class="note-card">
+          <h3>Model logic note</h3>
+          <p>
+            Total household spending starts from the initial withdrawal amount and normally rises with inflation. If the inflation-skip rule is enabled, inflation increases are skipped after negative return years. State pension starts at the chosen pension age for each person and reduces the amount drawn from the portfolio. Withdrawals are taken from cashlike assets first, then bonds, then equities.
+          </p>
+        </article>
+
         <article class="chart-card">
           <div class="card-header">
             <div>
@@ -315,7 +292,7 @@
         <article class="chart-card">
           <div class="card-header">
             <div>
-              <h3>Sequence of Returns Stress Tests</h3>
+              <h3 title="Fixed stress paths designed to show vulnerability to poor return order, inflation spikes and stagnation.">Sequence of Returns Stress Tests <span class="help">?</span></h3>
               <p>Deterministic stress paths using the same spending rule and pension offsets</p>
             </div>
           </div>
