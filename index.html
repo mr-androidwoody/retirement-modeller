@@ -12,14 +12,9 @@
     <header class="page-header">
       <div class="title-block">
         <h1>Retirement Simulator</h1>
-      <p class="intro">
-Test retirement sustainability using Monte Carlo modelling, Guyton-Klinger guardrails, two-person state pension offsets, cashlike buffers, and deterministic stress scenarios. Review success probability alongside bad-sequence vulnerability, with yearly spending, withdrawals, and portfolio outcomes shown in nominal or real terms.
-</p>
-        <div class="context-chips" aria-label="Model context">
-          <span class="chip">Spending rule: Guyton-Klinger</span>
-          <span class="chip">Income offset: State pension</span>
-          <span class="chip">Stress path set: 8 scenarios</span>
-        </div>
+        <p class="intro">
+          Test retirement sustainability using Monte Carlo modelling, Guyton-Klinger guardrails, two-person state pension offsets, cashlike buffers, and deterministic stress scenarios. Review success probability alongside bad-sequence vulnerability, with yearly spending, withdrawals, and portfolio outcomes shown in nominal or real terms.
+        </p>
       </div>
     </header>
 
@@ -342,23 +337,6 @@ Test retirement sustainability using Monte Carlo modelling, Guyton-Klinger guard
             <p>Household spending, state pension, and portfolio withdrawals.</p>
           </div>
           <canvas id="spendingChart" height="320"></canvas>
-        </section>
-
-        <section class="chart-card">
-          <div class="card-header">
-            <h2>
-              Sequence of Returns Stress Tests
-              <button
-                class="help inline-help"
-                type="button"
-                tabindex="-1"
-                aria-label="Sequence of Returns Stress Tests help"
-                title="Deterministic sequences that stress the plan in different ways, including early crashes, inflation shocks, weak bonds, and poor return ordering."
-              >?</button>
-            </h2>
-            <p>Eight fixed scenario paths so you can see vulnerability, not just probability.</p>
-          </div>
-          <canvas id="stressChart" height="360"></canvas>
         </section>
 
         <section class="table-card" id="tableCard">
